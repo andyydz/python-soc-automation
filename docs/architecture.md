@@ -225,4 +225,4 @@ There is no confirmed live integration at present. The parser runs against a sta
 - Add a separate input layer for reading alert exports, keeping file handling out of the parser.
 - Introduce logging and clearer error reporting.
 - Extend the test suite with each new module.
--
+
