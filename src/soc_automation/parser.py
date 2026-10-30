@@ -4,12 +4,6 @@ from typing import Any
 def parse_wazuh_alert(alert: dict[str, Any]) -> dict[str, Any]:
     """
     Extract important information from a Wazuh security alert.
-
-    Args:
-        alert: A Wazuh alert represented as a Python dictionary.
-
-    Returns:
-        A normalized dictionary containing important alert fields.
     """
 
     if not isinstance(alert, dict):

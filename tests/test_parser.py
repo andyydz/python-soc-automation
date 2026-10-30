@@ -30,17 +30,40 @@ def test_reject_non_dictionary_alert():
 
 
 def test_reject_invalid_rule():
-    alert = {"rule": "invalid"}
-
     with pytest.raises(ValueError):
-        parse_wazuh_alert(alert)
+        parse_wazuh_alert({"rule": "invalid"})
 
 
 def test_reject_invalid_agent():
+    with pytest.raises(ValueError):
+        parse_wazuh_alert({
+            "rule": {},
+            "agent": "invalid"
+        })
+
+
+def test_handle_missing_alert_fields():
+    result = parse_wazuh_alert({})
+
+    assert result["rule_id"] == "unknown"
+    assert result["severity"] is None
+    assert result["agent"] == "unknown"
+    assert result["description"] == "No description provided"
+
+
+def test_handle_partially_missing_alert_fields():
     alert = {
-        "rule": {},
-        "agent": "invalid"
+        "rule": {
+            "id": "550"
+        },
+        "agent": {
+            "name": "SENTINEL-LINUX01"
+        }
     }
 
-    with pytest.raises(ValueError):
-        parse_wazuh_alert(alert)
+    result = parse_wazuh_alert(alert)
+
+    assert result["rule_id"] == "550"
+    assert result["severity"] is None
+    assert result["agent"] == "SENTINEL-LINUX01"
+    assert result["description"] == "No description provided"
