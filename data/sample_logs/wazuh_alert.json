@@ -1,0 +1,10 @@
+﻿{
+  "rule": {
+    "id": "550",
+    "level": 7,
+    "description": "Integrity checksum changed"
+  },
+  "agent": {
+    "name": "SENTINEL-LINUX01"
+  }
+}
