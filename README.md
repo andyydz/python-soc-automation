@@ -16,13 +16,13 @@ Python tooling that parses and validates Wazuh security alerts as the foundation
 
 ## Summary
 
-Raw Wazuh alerts are nested JSON, and fields are not always present or well formed. Analysts repeatedly extract the same values by hand, and automation built on unvalidated input fails in unpredictable ways.
+Raw Wazuh alerts are nested JSON, and fields are not always present or well formed. Analysts repeatedly extract the same values by hand, and automation built on unvalidated input fails unpredictably.
 
 This project addresses the first step of that problem. It takes a Wazuh alert as a Python dictionary, validates its structure, extracts the key fields and returns a consistent result. Invalid input raises specific exceptions, and missing fields fall back to defaults. The parser is covered by automated pytest tests.
 
 **Built with:** Python 3, JSON, pytest, Git and GitHub.
 
-The long-term goal is a SOC automation tool that applies explainable triage logic to Wazuh alerts and produces structured reports for analysts. Only the parser is implemented today. See [Roadmap](#roadmap) for what is planned.
+The long-term goal is a SOC automation tool that applies explainable triage logic to Wazuh alerts and produces structured reports for analysts. Only the parser is implemented today. See [Roadmap](#roadmap) for planned work.
 
 ## Implemented
 
@@ -34,7 +34,7 @@ The long-term goal is a SOC automation tool that applies explainable triage logi
 | Error handling | Raises `TypeError` for a non-dictionary alert and `ValueError` for an invalid `rule` or `agent` structure |
 | Missing-field handling | Uses default values when fields are absent or partially absent |
 | Automated tests | `tests/test_parser.py`, run with pytest |
-| Project setup | Python virtual environment, pytest configuration, Git and GitHub version control |
+| Project setup | Python virtual environment, pytest configuration (`pytest.ini`), Git and GitHub version control |
 
 The parser works on alerts already loaded as Python dictionaries. It has no connection to a live Wazuh manager and does not perform scoring, enrichment, correlation or reporting.
 
@@ -51,7 +51,7 @@ The parser works on alerts already loaded as Python dictionaries. It has no conn
 
 ## Architecture
 
-The diagram shows the current data flow. Solid lines are implemented. Dashed lines and the lower block are planned and do not exist yet.
+Solid lines show the current data flow. The dashed lines and the Planned block are future work and do not exist yet.
 
 ```mermaid
 flowchart LR
@@ -85,7 +85,7 @@ flowchart LR
 
 ## Example
 
-The following sample is illustrative. It shows the expected input and output format and is not a recorded execution result.
+The sample below is illustrative. It shows the input and output format and is not a recorded execution result.
 
 **Input: Wazuh alert**
 
@@ -115,7 +115,7 @@ The following sample is illustrative. It shows the expected input and output for
 }
 ```
 
-**Invalid input**
+**Invalid and incomplete input**
 
 | Input | Result |
 |---|---|
@@ -145,9 +145,11 @@ If PowerShell blocks script activation, allow it for the current session only:
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
+`pytest.ini` configures pytest to discover the `src` package and the `tests` directory, so the tests run from the repository root without extra path settings.
+
 ### Run the parser
 
-The parser is a Python function without a command-line interface. Add `src` to the import path for the session, then call it:
+The parser is a Python function without a command-line interface. Outside pytest, add `src` to the import path for the session, then call it:
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -173,7 +175,7 @@ python -m pytest -v
 
 ## Testing
 
-Tests are in `tests/test_parser.py` and cover both normal operation and failure cases:
+Tests are in `tests/test_parser.py` and cover normal operation and failure cases:
 
 - Normal Wazuh alert parsing
 - Invalid alert input
@@ -182,26 +184,33 @@ Tests are in `tests/test_parser.py` and cover both normal operation and failure 
 - Alert with missing fields
 - Alert with partially missing fields
 
-The latest test run I reported passed all six tests. Re-run `python -m pytest -v` to confirm the current result, since the test count will change as the project grows.
+The latest verified test run passed six tests. The count will change as the project grows.
 
 ## Repository Structure
 
 ```text
 python-soc-automation/
+├── data/
+│   └── sample_logs/
+│       └── wazuh_alert.json
 ├── src/
 │   └── soc_automation/
-│       └── parser.py      # parse_wazuh_alert()
-└── tests/
-    └── test_parser.py     # parser tests
+│       ├── __init__.py
+│       └── parser.py          # parse_wazuh_alert()
+├── tests/
+│   └── test_parser.py
+├── .gitignore
+├── pytest.ini
+└── README.md
 ```
 
-Only files relevant to the parser are shown. Environment and configuration files are omitted.
+The `.venv` virtual environment is excluded from version control.
 
 ## Relationship to SENTINEL SOC Lab
 
-SENTINEL SOC Lab is my hands-on environment for working with security monitoring and alert data. This project is intended to complement it by moving from manually reading alerts to processing them with code.
+SENTINEL SOC Lab is my hands-on environment for working with security monitoring and alert data. This project complements it by moving from reading alerts manually to processing them with code, and supports my development toward SOC automation and security operations work.
 
-The two projects are currently separate. Integration is planned and has not been implemented. The goal is to apply this engine's parsing and triage logic to alerts generated in the lab, which supports my development toward SOC automation and security operations work.
+The two projects are currently separate. Integration is planned and has not been implemented. The intent is to apply this engine's parsing and triage logic to alerts generated in the lab.
 
 ## Roadmap
 
@@ -226,7 +235,7 @@ The two projects are currently separate. Integration is planned and has not been
 - Improved logging and error handling
 - SENTINEL SOC Lab integration
 
-New features will be built on the validated parser output and will keep scoring logic transparent, so the reason for any classification can be traced.
+New features will build on the validated parser output, and scoring logic will stay transparent so any classification can be traced.
 
 ## Security Considerations
 
