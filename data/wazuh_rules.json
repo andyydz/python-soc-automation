@@ -1,0 +1,93 @@
+{
+  "dataset_version": "1.0.0",
+  "dataset_name": "Wazuh Default Rule Metadata",
+  "source": {
+    "project": "Wazuh",
+    "repository": "https://github.com/wazuh/wazuh-ruleset",
+    "file": "rules/0015-ossec_rules.xml",
+    "reference": "https://github.com/wazuh/wazuh-ruleset/blob/master/rules/0015-ossec_rules.xml"
+  },
+  "rules": {
+    "550": {
+      "rule_id": "550",
+      "level": 7,
+      "description": "Integrity checksum changed.",
+      "category": "ossec",
+      "decoded_as": "syscheck_integrity_changed",
+      "groups": [
+        "syscheck",
+        "syscheck_entry_modified",
+        "syscheck_file",
+        "pci_dss_11.5",
+        "gpg13_4.11",
+        "gdpr_II_5.1.f",
+        "hipaa_164.312.c.1",
+        "hipaa_164.312.c.2",
+        "nist_800_53_SI.7",
+        "tsc_PI1.4",
+        "tsc_PI1.5",
+        "tsc_CC6.1",
+        "tsc_CC6.8",
+        "tsc_CC7.2",
+        "tsc_CC7.3"
+      ],
+      "mitre": {
+        "techniques": ["T1492"]
+      }
+    },
+    "553": {
+      "rule_id": "553",
+      "level": 7,
+      "description": "File deleted.",
+      "category": "ossec",
+      "decoded_as": "syscheck_deleted",
+      "groups": [
+        "syscheck",
+        "syscheck_entry_deleted",
+        "syscheck_file",
+        "pci_dss_11.5",
+        "gpg13_4.11",
+        "gdpr_II_5.1.f",
+        "hipaa_164.312.c.1",
+        "hipaa_164.312.c.2",
+        "nist_800_53_SI.7",
+        "tsc_PI1.4",
+        "tsc_PI1.5",
+        "tsc_CC6.1",
+        "tsc_CC6.8",
+        "tsc_CC7.2",
+        "tsc_CC7.3"
+      ],
+      "mitre": {
+        "techniques": ["T1107", "T1485"]
+      }
+    },
+    "554": {
+      "rule_id": "554",
+      "level": 5,
+      "description": "File added to the system.",
+      "category": "ossec",
+      "decoded_as": "syscheck_new_entry",
+      "groups": [
+        "syscheck",
+        "syscheck_entry_added",
+        "syscheck_file",
+        "pci_dss_11.5",
+        "gpg13_4.11",
+        "gdpr_II_5.1.f",
+        "hipaa_164.312.c.1",
+        "hipaa_164.312.c.2",
+        "nist_800_53_SI.7",
+        "tsc_PI1.4",
+        "tsc_PI1.5",
+        "tsc_CC6.1",
+        "tsc_CC6.8",
+        "tsc_CC7.2",
+        "tsc_CC7.3"
+      ],
+      "mitre": {
+        "techniques": []
+      }
+    }
+  }
+}
