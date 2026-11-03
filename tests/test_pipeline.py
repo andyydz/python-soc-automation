@@ -86,19 +86,15 @@ def test_process_wazuh_alert_returns_standardized_envelope():
 
     result = process_wazuh_alert(alert)
 
-    # Verify the output envelope
     assert result["schema_version"] == "1.0"
     assert result["record_type"] == "normalized_alert"
 
-    # Verify source information
     assert result["source"]["product"] == "Wazuh"
     assert result["source"]["ingestion_type"] == "file_export"
 
-    # Verify processing metadata
     assert "warnings" in result["processing"]
     assert "integrity" in result["processing"]
 
-    # Verify original alert preservation
     assert result["raw_alert"] == alert
 
 
@@ -160,3 +156,82 @@ def test_process_wazuh_alert_without_sha256():
     result = process_wazuh_alert(alert)
 
     assert result["processing"]["integrity"] is None
+
+
+# --------------------------------------------------
+# ENRICHMENT INTEGRATION TESTS
+# --------------------------------------------------
+
+
+def test_process_wazuh_alert_with_enrichment():
+    alert = {
+        "rule": {
+            "id": "550",
+            "level": 7,
+            "description": "Integrity checksum changed",
+        },
+        "agent": {
+            "name": "SENTINEL-LINUX01",
+        },
+        "timestamp": "2026-11-03T10:30:00Z",
+    }
+
+    result = process_wazuh_alert(
+        alert,
+        include_enrichment=True,
+    )
+
+    assert result["schema_version"] == "1.1"
+    assert result["record_type"] == "normalized_alert"
+
+    assert "enrichment" in result
+    assert result["enrichment"]["status"] in (
+        "complete",
+        "partial",
+        "unavailable",
+    )
+
+    assert (
+        result["enrichment"]["severity_context"]["original_level"]
+        == 7
+    )
+
+    assert result["raw_alert"] == alert
+
+
+def test_process_wazuh_alert_without_enrichment():
+    alert = {
+        "rule": {
+            "id": "550",
+            "level": 7,
+            "description": "Integrity checksum changed",
+        },
+        "agent": {
+            "name": "SENTINEL-LINUX01",
+        },
+        "timestamp": "2026-11-03T10:30:00Z",
+    }
+
+    result = process_wazuh_alert(alert)
+
+    assert result["schema_version"] == "1.0"
+    assert "enrichment" not in result
+
+
+def test_process_wazuh_alert_rejects_invalid_enrichment_option():
+    alert = {
+        "rule": {
+            "id": "550",
+            "level": 7,
+        },
+        "agent": {
+            "name": "SENTINEL-LINUX01",
+        },
+        "timestamp": "2026-11-03T10:30:00Z",
+    }
+
+    with pytest.raises(TypeError):
+        process_wazuh_alert(
+            alert,
+            include_enrichment="yes",
+        )
