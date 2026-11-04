@@ -1,15 +1,33 @@
 # Development Log
 
 Developer: Andrew Vinston D'Souza
-Environment: Windows 11, Visual Studio Code, PowerShell, Python 3.14.4, pytest 9.2.0, Git and GitHub, virtual environment (`.venv`)
+Environment: Windows 11, Visual Studio Code, PowerShell, Git and GitHub, local Python virtual environment (`.venv`). The project requires Python 3.10 or newer.
 
 Related: [README](../README.md) | [Architecture](architecture.md) | [Testing](testing.md) | [Sample output](sample-output.md)
 
-This log is organized by development phase. No dates are recorded.
+This log records how the project developed, from the initial repository to the four completed milestones. It is organized chronologically by phase. No dates are recorded.
 
-## Phase 1: Project Initialization
+## Summary
 
-**Repository and structure.** The GitHub repository `andyydz/python-soc-automation` was created and set up locally. The project was organized with separate directories for application code, tests and sample data:
+| Phase | Focus | Status |
+|---|---|---|
+| 1 | Project foundation | Complete |
+| Milestone 1 | Standardized Alert Output | Complete |
+| Milestone 2 | Alert Enrichment | Complete |
+| Milestone 3 | Investigation-Ready Output | Complete |
+| Milestone 4 | CLI and Integration Interface | Complete |
+
+The current standardized output schema version is 1.2.
+
+## Phase 1: Project Foundation
+
+- Created the GitHub repository `andyydz/python-soc-automation` and set it up locally.
+- Established separate directories for application code (`src/`), tests (`tests/`), and sample data (`data/`).
+- Configured Git, GitHub, `.gitignore`, and `pytest.ini`.
+- Created a local virtual environment (`.venv`), excluded from Git because it is local and reproducible.
+- Added a synthetic Wazuh alert sample, intended to contain no production data.
+
+The initial layout:
 
 ```text
 python-soc-automation/
@@ -27,46 +45,77 @@ python-soc-automation/
 └── README.md
 ```
 
-**Development environment.** Work is done on Windows 11 in Visual Studio Code, with PowerShell as the shell.
+The layout has grown since this first structure. See [Architecture](architecture.md) for the current modules.
 
-**Virtual environment.** A Python virtual environment (`.venv`) isolates project dependencies from the system Python installation. It is excluded from Git through `.gitignore`, since it is local and reproducible.
+## Milestone 1: Standardized Alert Output
 
-## Phase 2: Parser Implementation (Milestone 1)
+The parser came first because every later stage depends on reliable alert data. Starting with a small, well-tested foundation reduces the risk of building enrichment logic on unvalidated input.
 
-**Purpose.** The parser is the first component because every later stage depends on reliable alert data. Starting with a small, well-tested foundation reduces the risk of building scoring or correlation logic on unvalidated input.
+**Initial parser.** `parse_wazuh_alert` in `src/soc_automation/parser.py` accepted a Python dictionary and extracted the rule ID, severity level, agent name, and description. Reading files was deliberately left out so that parsing logic could be tested without external dependencies. At that stage the parser validated its input before reading any fields: a non-dictionary alert raised `TypeError`, and a `rule` or `agent` with an invalid structure raised `ValueError`. The reasoning was that a security automation tool should not turn malformed input into plausible-looking output. The first test suite had six tests covering successful parsing, invalid input types and structures, and fully or partially missing fields.
 
-**Function.** `parse_wazuh_alert(alert: dict[str, Any]) -> dict[str, Any]` in `src/soc_automation/parser.py`. It extracts the rule ID, severity level, agent name and description, and returns them under the keys `rule_id`, `severity`, `agent` and `description`.
+**Extension to a standardized output.** Milestone 1 then added:
 
-**Scope decision.** The parser accepts a Python dictionary. Reading files and connecting to Wazuh were deliberately left out, so that parsing logic can be tested without any external dependency.
+- JSON file ingestion, kept separate from parsing logic.
+- Preservation of the original alert in `raw_alert`.
+- A standardized output envelope.
+- Timestamp normalization to UTC.
+- Optional SHA-256 integrity calculation over the original file bytes.
+- Processing warnings and error handling.
+- UTF-8 BOM support through `utf-8-sig`.
 
-## Phase 3: Validation and Exception Handling
+## Milestone 2: Alert Enrichment
 
-The parser validates its input before reading any fields:
+Implemented:
 
-- A non-dictionary alert raises `TypeError`.
-- A `rule` or `agent` that is not a valid dictionary structure raises `ValueError`.
-- Absent fields use default values defined in the parser.
+- Local Wazuh rule metadata lookup.
+- Engine-defined severity context classification.
+- Local MITRE ATT&CK dataset lookup.
+- Data-quality checks.
+- Enrichment status, provenance, and error handling.
 
-The reasoning is that a security automation tool should not turn malformed input into plausible-looking output. Distinct exception types separate "wrong kind of input" from "right kind of input with a bad structure".
+Enrichment is explainable and dataset-driven: derived values come from defined logic or local datasets rather than guesses.
 
-## Phase 4: Sample Data
+Severity context ranges are defined by this engine. They are not official Wazuh severity categories.
 
-A sample Wazuh alert was added as `data/sample_logs/wazuh_alert.json` to provide realistic input for tests. It is intended to contain no production data. See challenge 2 below for an encoding issue encountered when creating it.
+| Rule level | Severity context |
+|---|---|
+| 0 | Ignored |
+| 1 to 4 | Low |
+| 5 to 7 | Medium |
+| 8 to 11 | High |
+| 12 to 15 | Critical |
 
-## Phase 5: Test Implementation
+**Limitation.** The MITRE ATT&CK dataset currently has no verified rule mappings. The lookup functionality exists, but no technique mappings are populated, and none are fabricated.
 
-pytest was introduced to verify behavior as the parser was written. The suite in `tests/test_parser.py` currently contains six tests:
+## Milestone 3: Investigation-Ready Output
 
-1. Successful Wazuh alert parsing.
-2. Rejection of non-dictionary input.
-3. Rejection of an invalid rule structure.
-4. Rejection of an invalid agent structure.
-5. Handling completely missing alert fields.
-6. Handling partially missing alert fields.
+Implemented a structured `investigation` object containing:
 
-The latest verified run passed all six tests (`python -m pytest -v`). Details are in [Testing](testing.md).
+- Investigation status.
+- Affected asset fields.
+- Detection details.
+- Priority context, when enrichment is available.
+- Case reference.
+- Evidence and analyst notes.
 
-## Phase 6: Git and GitHub Workflow
+The engine does not invent asset information or analyst observations. The object is a structured record, not full case management.
+
+## Milestone 4: CLI and Integration Interface
+
+Implemented:
+
+- Python package configuration through `pyproject.toml`.
+- Editable installation with `python -m pip install -e .`.
+- The `soc-automation` CLI entry point.
+- Local JSON file input.
+- Optional `--sha256` and `--enrich` flags.
+- JSON output to stdout or a specified file.
+- Automatic creation of missing output directories.
+- Error handling with an appropriate exit status.
+
+The engine still processes exported JSON files only. It has no live Wazuh connection.
+
+## Development Practice
 
 The project follows **Build, Test, Verify, Commit, Push**:
 
@@ -78,15 +127,15 @@ The project follows **Build, Test, Verify, Commit, Push**:
 | Commit | Record the verified change with a clear message, keeping history readable |
 | Push | Publish to GitHub so the remote repository reflects the verified state |
 
-Working in small increments means a failing test points to a small, recent change, which keeps debugging fast and the history easy to review.
+Working in small increments means a failing test points to a small, recent change, which keeps debugging fast and the history easy to review. Tests run with `python -m pytest -v`; see [Testing](testing.md) for details.
 
-## Phase 7: Development Challenges and Resolutions
+## Development Challenges and Resolutions
 
 ### Challenge 1: Import and pytest configuration
 
-**What happened.** The parser lives in `src/soc_automation/`, a directory that is not on Python's import path by default. The test file needed to import `soc_automation` and the source directory therefore had to be discoverable by pytest.
+**What happened.** The code lives in `src/soc_automation/`, which is not on Python's import path by default, so tests could not import `soc_automation`.
 
-**Why it mattered.** Without it, tests cannot import the code they are meant to verify, and the layout would have to be abandoned or worked around with fragile path changes inside test files.
+**Why it mattered.** Without a fix, tests cannot import the code they verify, and the layout would have to be abandoned or worked around with fragile path changes inside test files.
 
 **Resolution.** A `pytest.ini` file was added:
 
@@ -96,29 +145,29 @@ pythonpath = src
 testpaths = tests
 ```
 
-`pythonpath = src` adds the `src` directory to the import path during test runs, so `soc_automation` can be imported. `testpaths = tests` tells pytest to look for tests in the `tests` directory.
+`pythonpath = src` adds the source directory to the import path during test runs, and `testpaths = tests` tells pytest where to discover tests.
 
-**Learned.** Import paths are configuration, not an afterthought, and keeping that configuration in one project file is cleaner than path manipulation inside tests.
+**Learned.** Import paths are configuration, not an afterthought. Keeping them in one project file is cleaner than path manipulation inside tests.
 
 ### Challenge 2: UTF-8 BOM in the sample JSON
 
-**What happened.** The sample JSON file was created through PowerShell using UTF-8 encoding with a byte order mark (BOM), a marker character at the start of the file.
+**What happened.** The sample JSON file was created through PowerShell with a UTF-8 byte order mark (BOM) at the start of the file.
 
 **Why it mattered.** A BOM is not part of the JSON content. Reading such a file with plain UTF-8 leaves the marker in the text, which can interfere with JSON parsing.
 
-**Resolution.** The test reads the file with `encoding="utf-8-sig"`. This encoding removes a BOM if one is present and reads files without a BOM as ordinary UTF-8, so it is safe for either kind of file.
+**Resolution.** The file is read with `utf-8-sig`, which removes a BOM if present and reads files without one as ordinary UTF-8. Ingestion keeps this tolerance, so files saved with or without a BOM are accepted.
 
-**Learned.** Tool defaults affect file contents, and readers should be tolerant of common encoding variations when handling data created on different systems.
+**Learned.** Tool defaults affect file contents. Readers should tolerate common encoding variations in data created on different systems.
 
 ### Challenge 3: Separating implementation and tests
 
-**What happened.** A decision was made to keep the parser and its tests in separate files rather than combine them.
+**What happened.** A decision was needed on whether to keep the parser and its tests together or apart.
 
 **Why it mattered.** Mixing the two makes it harder to see what is production code and what is verification.
 
-**Resolution.** Implementation stays in `src/soc_automation/parser.py` and tests stay in `tests/test_parser.py`.
+**Resolution.** Application code stays under `src/soc_automation/` and tests stay under `tests/`.
 
-**Learned.** Separation of concerns makes each file easier to read and change. Tests can be updated or extended without touching the implementation, and the source tree stays limited to application code.
+**Learned.** Separation makes each file easier to read and change. Tests can be extended without touching the implementation, and the source tree stays limited to application code.
 
 ### Challenge 4: Git authentication
 
@@ -126,7 +175,7 @@ testpaths = tests
 
 **Why it mattered.** Without working authentication, commits cannot be pushed, and credentials must be handled without being stored in the project.
 
-**Resolution.** Git Credential Manager browser-based authentication was configured, and access to the remote repository was verified. No credentials are stored in the repository.
+**Resolution.** Git Credential Manager browser-based authentication was configured and access to the remote was verified. No credentials are stored in the repository.
 
 **Learned.** Use a credential manager rather than embedding secrets in commands or files.
 
@@ -147,33 +196,33 @@ git push origin main
 
 **Learned.** Synchronize with the remote before pushing, and treat a rejected push as information rather than an obstacle to override.
 
-## Phase 8: Technical Decisions
+## Technical Decisions
 
 | Decision | Reasoning |
 |---|---|
-| Accept a dictionary rather than read files in the parser | Keeps parsing independent of I/O and easy to test |
 | Separate `src/` and `tests/` | Clear boundary between application code and verification |
-| Raise `TypeError` and `ValueError` | Distinguishes wrong input type from invalid structure |
-| Use defaults for absent fields | Alerts may be incomplete, and the behavior is explicit and tested |
 | Configure paths in `pytest.ini` | One place for import and discovery settings |
-| Read sample JSON with `utf-8-sig` | Tolerates files saved with or without a BOM |
+| Read JSON with `utf-8-sig` | Tolerates files saved with or without a BOM |
+| Keep file ingestion separate from parsing | Parsing logic stays independent of I/O and easy to test |
+| Preserve the original alert in `raw_alert` | Source data is never lost or silently altered |
+| Keep enrichment explainable and dataset-driven | Derived values are traceable, and no mappings are invented |
+| Calculate SHA-256 on original bytes, not re-serialized JSON | The digest reflects the exact input processed |
+| Keep modular responsibilities across pipeline components | Each component is easier to test and change |
 | Rebase before pushing, no force push | Preserves remote history and keeps the log linear |
+| Follow Build, Test, Verify, Commit, Push | Small, verified increments keep debugging and review simple |
 
-## Phase 9: Current Status
+## Current Status
 
-- Milestone 1, the Wazuh alert parser, is complete with six passing tests in the latest verified run.
-- There is no live Wazuh integration, scoring, correlation or reporting.
-- The project is in development and is not production-ready.
+- Phase 1 and Milestones 1 to 4 are complete.
+- The engine processes exported Wazuh alert JSON files through the `soc-automation` CLI or the Python package.
+- The current output schema version is 1.2.
+- The MITRE ATT&CK dataset has no verified rule mappings yet.
+- There is no live Wazuh manager or API connection, no autonomous incident response, and no full case-management functionality.
 
-## Phase 10: Future Milestones (Planned)
+## Future Possibilities (Not Implemented)
 
-None of these are implemented.
+These are possibilities only, not current capabilities:
 
-1. Alert normalization
-2. Severity classification and risk scoring
-3. IOC extraction
-4. Alert correlation
-5. Automated reporting in CSV and JSON
-6. Testing and quality improvements
-7. SENTINEL SOC Lab integration
-8. Final documentation and project review
+- Integration with SENTINEL SOC Lab, which is a separate project.
+- Support for other SIEM platforms, such as Splunk, Elastic, and Microsoft Sentinel.
+- Verified MITRE ATT&CK rule mappings in the local dataset.
