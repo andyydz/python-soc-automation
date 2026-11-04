@@ -1,12 +1,12 @@
-Code of Conduct
+# Code of Conduct
 
-Our Commitment
+## Our Commitment
 
-We are committed to providing a welcoming, respectful, and inclusive environment for everyone participating in the Python SOC Automation Engine project.
+We are committed to providing a welcoming, respectful, inclusive, and professional environment for everyone participating in the Python SOC Automation Engine project.
 
-We want all contrib qqutors, maintainers, and community members to feel comfortable sharing ideas, reporting issues, asking questions, and collaborating.
+We want all contributors, maintainers, and community members to feel comfortable sharing ideas, reporting issues, asking questions, and collaborating.
 
-Expected Behavior
+## Expected Behavior
 
 All community members are expected to:
 
@@ -14,10 +14,10 @@ All community members are expected to:
 - Communicate constructively.
 - Welcome different perspectives and experiences.
 - Provide helpful and actionable feedback.
-- Respect other contributors' time and efforts.
+- Respect other contributors' time and effort.
 - Focus on improving the project and its technical quality.
 
-Unacceptable Behavior
+## Unacceptable Behavior
 
 The following behaviors are not acceptable:
 
@@ -28,24 +28,26 @@ The following behaviors are not acceptable:
 - Threatening or intimidating other contributors.
 - Sharing malicious code, credentials, or sensitive security information irresponsibly.
 
-Scope
+## Scope
 
 This Code of Conduct applies to all project spaces, including:
 
 - GitHub issues.
 - Pull requests.
 - Discussions.
-- Project-related communication and collaboration.
+- Other project-related communication and collaboration.
 
-Reporting Issues
+## Reporting Concerns
 
-If you experience or observe unacceptable behavior, contact the repository maintainer through a private GitHub communication channel.
+If you experience or observe unacceptable behavior, contact the repository maintainer privately through an appropriate private GitHub communication channel. Please do not report conduct concerns in public issues, pull requests, or discussions.
 
-Please include relevant details so the concern can be reviewed appropriately.
+Include relevant details, such as what happened, where it happened, and any links or context that will help the concern be reviewed.
 
-Enforcement
+To report a security vulnerability rather than a conduct concern, follow [SECURITY.md](SECURITY.md) instead.
 
-The project maintainer is responsible for reviewing reported concerns and determining appropriate action.
+## Enforcement
+
+The project maintainer reviews reported concerns and determines appropriate action. Reports are handled on a best-effort basis, as this is an independently maintained project.
 
 Depending on the situation, actions may include:
 
@@ -54,10 +56,6 @@ Depending on the situation, actions may include:
 - Temporary restrictions on participation.
 - Blocking contributors from project spaces in serious or repeated cases.
 
-Attribution
+## Attribution
 
-This Code of Conduct is inspired by the principles of the Contributor Covenant.
-
-For more information, visit:
-
-https://www.contributor-covenant.org/
+This Code of Conduct is inspired by the principles of the [Contributor Covenant](https://www.contributor-covenant.org/).
