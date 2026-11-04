@@ -1,48 +1,65 @@
-Security Policy
+# Security Policy
 
-Supported Versions
+Python SOC Automation Engine is a local, file-based tool that ingests Wazuh alert JSON files, validates and normalizes them, optionally enriches them using local datasets, and produces investigation-ready records. It does not connect to a live Wazuh manager and is not a production incident-response service.
 
-Security updates are currently focused on the latest version available on the "main" branch.
+This project is independently maintained. Security reports are handled on a best-effort basis.
 
-Version| Supported
-Latest ("main")| Yes
-Older versions| No
+## Supported Versions
 
-Reporting a Vulnerability
+Security updates are focused on the latest code on the `main` branch.
 
-Security vulnerabilities should be reported responsibly.
+| Version          | Supported |
+| ---------------- | --------- |
+| Latest (`main`)  | Yes       |
+| Older versions   | No        |
 
-Please do not disclose sensitive vulnerability details through public GitHub issues.
+## Reporting a Vulnerability
 
-If GitHub Private Vulnerability Reporting is enabled for this repository, please use that feature to submit a private report.
+Please report security vulnerabilities responsibly and privately.
 
-If private reporting is unavailable, contact the repository maintainer through an appropriate private GitHub channel before publicly disclosing the issue.
+**Do not report vulnerabilities through public GitHub issues or pull requests.**
 
-What to Include
+1. If GitHub Private Vulnerability Reporting is enabled for this repository, use the **Report a vulnerability** option on the repository's **Security** tab to submit a private report.
+2. If private reporting is unavailable, contact the repository maintainer through an appropriate private GitHub channel, and do not include sensitive technical details in any public post or comment.
 
-When reporting a security vulnerability, please include:
+For non-security bugs and feature requests, use the repository's regular issue templates instead.
+
+## What to Include
+
+A useful report contains:
 
 - A clear description of the vulnerability.
 - Steps to reproduce the issue.
-- Potential security impact.
-- Affected files or components.
-- Relevant logs or proof-of-concept information, with sensitive data removed.
-- Suggested mitigation, if known.
+- The potential security impact.
+- Affected files, components, or CLI options.
+- The version or commit you tested, your Python version, and your operating system.
+- Relevant logs or proof-of-concept information, sanitized as described below.
+- A suggested mitigation, if known.
 
-Scope
+## Handling Sensitive Data in Reports
 
-Security reports may include issues involving:
+Please sanitize everything you submit. Do not share:
+
+- Credentials, API keys, or tokens.
+- Production alert exports or real security data.
+- Internal hostnames, IP addresses, usernames, or other sensitive infrastructure details.
+
+Use synthetic or redacted alert samples and the smallest proof of concept that demonstrates the issue.
+
+## Scope
+
+Reports may include issues involving:
 
 - Unsafe JSON alert processing.
 - Input validation weaknesses.
 - Improper handling of sensitive information.
-- File integrity verification issues.
-- Unsafe file operations.
+- File integrity verification (SHA-256) issues.
+- Unsafe file operations, including CLI file input and output.
 - Dependency vulnerabilities.
-- Incorrect handling of enrichment datasets.
+- Incorrect or unsafe handling of local enrichment datasets (Wazuh rule metadata and MITRE ATT&CK data).
 
-Responsible Disclosure
+## Responsible Disclosure
 
-Please allow the maintainer reasonable time to investigate and address reported vulnerabilities before publicly disclosing technical details.
+Please allow the maintainer reasonable time to investigate and address a reported vulnerability before publicly disclosing technical details. No specific response or resolution timeframe is guaranteed.
 
 Thank you for helping improve the security and reliability of this project.
