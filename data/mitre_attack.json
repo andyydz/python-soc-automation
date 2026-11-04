@@ -1,0 +1,7 @@
+{
+    "framework": "MITRE ATT&CK",
+    "framework_version": "20.0",
+    "source": "MITRE ATT&CK Enterprise",
+    "description": "Local MITRE ATT&CK dataset used by the Python SOC Automation Engine for Wazuh alert enrichment.",
+    "rule_mappings": {}
+}

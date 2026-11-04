@@ -32,7 +32,6 @@ def test_ingest_valid_wazuh_json_file(tmp_path):
     assert result["record_type"] == "normalized_alert"
     assert result["alert"]["rule_id"] == "550"
     assert result["raw_alert"] == alert
-
     assert "investigation" in result
     assert result["investigation"]["status"] == "new"
 
@@ -163,3 +162,74 @@ def test_ingest_sha256_matches_original_file_bytes(tmp_path):
     expected_hash = calculate_sha256(original_bytes)
 
     assert result["processing"]["integrity"]["hash"] == expected_hash
+
+
+def test_ingest_file_with_enrichment(tmp_path):
+    alert = create_wazuh_alert()
+    file_path = tmp_path / "enriched_alert.json"
+
+    file_path.write_text(json.dumps(alert), encoding="utf-8")
+
+    result = ingest_wazuh_alert_file(
+        file_path,
+        include_enrichment=True,
+    )
+
+    assert "enrichment" in result
+    assert (
+        result["enrichment"]["severity_context"]["severity_label"]
+        == "Medium"
+    )
+    assert "investigation" in result
+
+
+def test_ingest_file_without_enrichment(tmp_path):
+    alert = create_wazuh_alert()
+    file_path = tmp_path / "normal_alert.json"
+
+    file_path.write_text(json.dumps(alert), encoding="utf-8")
+
+    result = ingest_wazuh_alert_file(file_path)
+
+    assert "enrichment" not in result
+    assert "investigation" in result
+
+
+def test_ingest_utf8_bom_file(tmp_path):
+    alert = create_wazuh_alert()
+    file_path = tmp_path / "bom_alert.json"
+
+    original_bytes = (
+        b"\xef\xbb\xbf" + json.dumps(alert).encode("utf-8")
+    )
+
+    file_path.write_bytes(original_bytes)
+
+    result = ingest_wazuh_alert_file(file_path)
+
+    assert result["alert"]["rule_id"] == "550"
+    assert result["raw_alert"] == alert
+
+
+@pytest.mark.parametrize(
+    "option_name, option_value",
+    [
+        ("include_sha256", "yes"),
+        ("include_enrichment", 1),
+    ],
+)
+def test_ingest_invalid_option_types(
+    tmp_path,
+    option_name,
+    option_value,
+):
+    alert = create_wazuh_alert()
+    file_path = tmp_path / "alert.json"
+
+    file_path.write_text(json.dumps(alert), encoding="utf-8")
+
+    with pytest.raises(TypeError):
+        ingest_wazuh_alert_file(
+            file_path,
+            **{option_name: option_value},
+        )

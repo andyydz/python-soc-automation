@@ -1,23 +1,23 @@
 Python SOC Automation Engine
 
-Python tooling for ingesting, validating, normalizing, enriching, and structuring Wazuh security alerts into investigation-ready records.
+A Python-based SOC automation tool for ingesting, validating, normalizing, enriching, and structuring Wazuh security alerts into investigation-ready records.
 
-<div align="center">"Python" (https://img.shields.io/badge/Python-3-3b82f6?style=flat-square&logo=python&logoColor=white&labelColor=0d1117)
-"pytest" (https://img.shields.io/badge/Tested%20with-pytest-22d3ee?style=flat-square&logo=pytest&logoColor=white&labelColor=0d1117)
+"Python" (https://img.shields.io/badge/Python-3.10%2B-3b82f6?style=flat-square&logo=python&logoColor=white&labelColor=0d1117)
+"pytest" (https://img.shields.io/badge/Tests-160%20passed-22d3ee?style=flat-square&logo=pytest&logoColor=white&labelColor=0d1117)
 "Wazuh" (https://img.shields.io/badge/Input-Wazuh%20alerts-00d4aa?style=flat-square&labelColor=0d1117)
 "Status" (https://img.shields.io/badge/Status-In%20development-f59e0b?style=flat-square&labelColor=0d1117)
 
 Status: In development
 
-</div>---
+---
 
 Overview
 
 Security alerts often arrive as nested JSON containing fields that may be missing, inconsistent, or difficult to use directly in downstream workflows.
 
-The Python SOC Automation Engine addresses this problem by transforming Wazuh alert data into a consistent, structured representation.
+The Python SOC Automation Engine addresses this problem by transforming Wazuh alert data into a consistent, structured representation that can support security operations and investigation workflows.
 
-The engine currently supports:
+Current capabilities
 
 - Wazuh alert parsing and structural validation.
 - JSON file ingestion.
@@ -28,6 +28,10 @@ The engine currently supports:
 - MITRE ATT&CK metadata lookup using a local dataset.
 - Alert data-quality checks.
 - Investigation-ready output generation.
+- Command-line interface for alert processing.
+- JSON output to the terminal or a specified file.
+- Optional enrichment and integrity verification through CLI flags.
+- Automated testing of individual components and integrated workflows.
 
 The project focuses on transparent and predictable processing. It does not automatically declare an incident, execute response actions, or replace analyst judgment.
 
@@ -35,7 +39,7 @@ Technology: Python 3, JSON, pytest, Git and GitHub.
 
 Architecture
 
-The current processing pipeline is:
+The current processing workflow:
 
 flowchart TD
     A["Wazuh JSON alert file"] --> B["Ingestion"]
@@ -56,12 +60,14 @@ flowchart TD
     E --> L
     L --> M["Investigation-ready output"]
 
-Enrichment is optional. Investigation-ready output is generated for every alert processed through the pipeline.
+The CLI provides an interface to the processing pipeline. Users can supply a Wazuh JSON file and choose whether to enable enrichment, calculate an integrity hash, or export the processed result.
+
+Enrichment is optional. Investigation-ready output is generated for every successfully processed alert.
 
 Implemented Components
 
 Component| Implementation
-Alert parser| "parse_wazuh_alert()" — extracts and validates Wazuh alert fields
+Alert parser| "parse_wazuh_alert()" extracts and validates Wazuh alert fields
 Timestamp normalization| Converts supported ISO 8601 timestamps to UTC
 File ingestion| Reads Wazuh JSON exports and validates the document
 Integrity verification| Optional SHA-256 hash of the original file bytes
@@ -69,26 +75,28 @@ Rule metadata enrichment| Looks up metadata using a local Wazuh rules dataset
 Severity context| Assigns an explanatory severity category while preserving the original numeric level
 MITRE ATT&CK lookup| Looks up available technique and tactic mappings from a local dataset
 Data-quality checks| Identifies missing or invalid alert fields
-Investigation builder| Creates a structured investigation object from alert and optional enrichment data
+Investigation builder| Creates a structured investigation object
 Processing pipeline| Coordinates parsing, normalization, optional enrichment, and investigation generation
-Automated testing| pytest coverage across parsing, ingestion, normalization, enrichment, integrity, and investigation components
+CLI| Processes input files and supports optional processing flags
+JSON export| Displays processed output or saves it to a specified path
+Automated testing| Tests parsing, ingestion, normalization, enrichment, integrity, investigation, pipeline, and CLI functionality
 
 Standardized Alert Output
 
 The processing pipeline produces a standardized alert envelope.
 
-The current schema version is 1.2.
+Current schema version: "1.2"
 
 The envelope contains:
 
-- "schema_version": output schema version.
-- "record_type": identifies the record as a normalized alert.
-- "source": identifies Wazuh and the ingestion method.
-- "alert": normalized alert fields.
-- "processing": warnings and optional integrity metadata.
-- "raw_alert": original parsed alert data.
-- "enrichment": optional enrichment results.
-- "investigation": investigation-ready structure.
+- "schema_version": Output schema version.
+- "record_type": Identifies the record as a normalized alert.
+- "source": Identifies Wazuh and the ingestion method.
+- "alert": Normalized alert fields.
+- "processing": Warnings and optional integrity metadata.
+- "raw_alert": Original parsed alert data.
+- "enrichment": Optional enrichment results.
+- "investigation": Investigation-ready structure.
 
 The enrichment object is included when enrichment is enabled. The investigation object is always generated by the processing pipeline.
 
@@ -102,7 +110,12 @@ Integrity verification
 
 When enabled, SHA-256 is calculated from the exact original file bytes before decoding and JSON parsing.
 
-This provides a hash that can be used to verify whether the original input file has changed.
+The integrity metadata contains:
+
+- "algorithm": Hash algorithm used.
+- "hash": Calculated hexadecimal digest.
+
+This provides a checksum that can be used to identify changes to the original input file.
 
 The hash is optional and is not a digital signature or proof of the alert's authenticity.
 
@@ -110,13 +123,13 @@ Alert Enrichment
 
 Enrichment adds contextual information without replacing the original alert data.
 
-The current enrichment components are:
-
 Component| Purpose
 Rule metadata| Looks up available Wazuh rule information
 Severity context| Provides an explanatory severity category
 MITRE ATT&CK| Looks up available technique and tactic mappings
 Data quality| Identifies missing or invalid alert fields
+
+Severity classification
 
 Severity context currently uses the following engine-defined categories:
 
@@ -129,7 +142,11 @@ Wazuh Level| Context
 
 The original numeric Wazuh level is preserved.
 
+MITRE ATT&CK mapping
+
 MITRE mappings are dataset-driven. A technique or tactic is only returned when a mapping is available; the engine does not invent ATT&CK associations.
+
+The local dataset is designed to support validated rule-to-technique mappings as they are added.
 
 Enrichment can report "complete", "partial", or "unavailable" status, depending on the available lookup results.
 
@@ -137,9 +154,7 @@ Investigation-Ready Output
 
 Every alert processed through the pipeline receives an "investigation" object.
 
-The structure is intended to provide a consistent starting point for SOC investigation workflows.
-
-It includes:
+The structure provides a consistent starting point for SOC investigation workflows.
 
 Field| Purpose
 "status"| Initial investigation status
@@ -156,6 +171,77 @@ The initial status is "new".
 The investigation structure does not fabricate asset information, evidence, analyst notes, or incident conclusions. Fields that cannot be established from available data remain empty or null.
 
 The current implementation builds the initial investigation structure; it does not yet provide a complete case-management or investigation lifecycle interface.
+
+Command-Line Interface
+
+The project provides a command-line interface for processing Wazuh JSON alert files.
+
+Installation
+
+Clone the repository:
+
+git clone https://github.com/andyydz/python-soc-automation.git
+cd python-soc-automation
+
+Create and activate a virtual environment:
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+If PowerShell blocks activation:
+
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+Activate the environment again.
+
+Install the project in editable mode:
+
+python -m pip install --upgrade pip
+python -m pip install -e .
+
+Install pytest for running the test suite:
+
+python -m pip install pytest
+
+Basic usage
+
+Process a Wazuh alert and display the JSON output:
+
+soc-automation data/sample_logs/wazuh_alert.json
+
+Alternatively, run the CLI as a Python module:
+
+python -m soc_automation.cli data/sample_logs/wazuh_alert.json
+
+Available options
+
+Option| Description
+"--help"| Displays CLI help information
+"--sha256"| Calculates SHA-256 of the original input file
+"--enrich"| Enables local alert enrichment
+"-o", "--output"| Saves processed JSON to a specified output file
+
+Enable SHA-256 integrity verification
+
+soc-automation data/sample_logs/wazuh_alert.json --sha256
+
+Enable alert enrichment
+
+soc-automation data/sample_logs/wazuh_alert.json --enrich
+
+Export processed JSON
+
+soc-automation data/sample_logs/wazuh_alert.json --output reports/processed_alert.json
+
+Missing output directories are created automatically.
+
+Combine CLI options
+
+Enable enrichment, calculate SHA-256, and export the processed result:
+
+soc-automation data/sample_logs/wazuh_alert.json --enrich --sha256 --output reports/enriched_alert.json
+
+The CLI returns an exit code of "0" for successful processing and "1" for handled processing or file errors. Invalid command-line arguments are handled by argparse.
 
 Example
 
@@ -201,42 +287,11 @@ The following is a simplified illustrative example of the investigation-ready po
 
 This is a simplified structural illustration, not a recorded execution result. Optional enrichment and integrity fields are omitted.
 
-Getting Started
-
-Commands are written for Windows PowerShell.
-
-1. Clone the repository
-
-git clone https://github.com/andyydz/python-soc-automation.git
-cd python-soc-automation
-
-2. Create and activate a virtual environment
-
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-If PowerShell blocks activation:
-
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-
-Then activate the environment again.
-
-3. Install dependencies
-
-python -m pip install --upgrade pip
-python -m pip install pytest
-
-4. Run the tests
-
-python -m pytest -v
-
-The project uses "pytest.ini" to configure the source and test directories.
-
 Testing
 
-The project uses automated tests to validate individual components and their integration.
+The project uses pytest to validate individual components and their integration.
 
-Coverage includes:
+Test coverage includes
 
 - Wazuh alert parsing and validation.
 - Missing and malformed input handling.
@@ -249,11 +304,16 @@ Coverage includes:
 - Data-quality validation.
 - Investigation structure generation.
 - Pipeline integration with and without enrichment.
-- Preservation of original alert data.
+- CLI argument handling.
+- CLI output and file export.
+- Combined CLI options.
+- Error handling and exit codes.
 
-Latest verified test result: 145 passed.
+Latest verified test result: 160 passed.
 
-Run the full test suite locally to verify the current repository state.
+Run the complete test suite:
+
+python -m pytest -v
 
 Repository Structure
 
@@ -275,12 +335,14 @@ python-soc-automation/
 │       │   ├── __init__.py
 │       │   └── builder.py
 │       ├── __init__.py
+│       ├── cli.py
 │       ├── ingestion.py
 │       ├── integrity.py
 │       ├── normalizer.py
 │       ├── parser.py
 │       └── pipeline.py
 ├── tests/
+│   ├── test_cli.py
 │   ├── test_data_quality.py
 │   ├── test_engine.py
 │   ├── test_ingestion.py
@@ -293,10 +355,12 @@ python-soc-automation/
 │   ├── test_rule_metadata.py
 │   └── test_severity.py
 ├── .gitignore
+├── LICENSE
+├── pyproject.toml
 ├── pytest.ini
 └── README.md
 
-The structure above describes the main project components; additional files may exist as development continues.
+This shows the main project components; additional documentation and repository configuration files may also exist.
 
 Relationship to SENTINEL SOC Lab
 
@@ -310,30 +374,32 @@ Roadmap
 
 Completed
 
-- [x] Project foundation and Python environment
-- [x] Wazuh alert parsing and validation
-- [x] Missing-field handling
-- [x] Timestamp normalization
-- [x] JSON file ingestion
-- [x] Optional SHA-256 integrity verification
-- [x] Local Wazuh rule metadata enrichment
-- [x] Severity context classification
-- [x] MITRE ATT&CK dataset lookup
-- [x] Alert data-quality checks
-- [x] Investigation-ready output generation
-- [x] Pipeline integration and automated tests
+- [x] Project foundation and Python environment.
+- [x] Wazuh alert parsing and validation.
+- [x] Missing-field handling.
+- [x] Timestamp normalization.
+- [x] JSON file ingestion.
+- [x] Optional SHA-256 integrity verification.
+- [x] Local Wazuh rule metadata enrichment.
+- [x] Severity context classification.
+- [x] MITRE ATT&CK dataset lookup.
+- [x] Alert data-quality checks.
+- [x] Investigation-ready output generation.
+- [x] Pipeline integration and automated tests.
+- [x] Command-line interface.
+- [x] JSON output export.
+- [x] CLI options for enrichment and SHA-256.
+- [x] CLI automated tests.
 
 Planned
 
-- [ ] Command-line interface
-- [ ] JSON output export
-- [ ] Improved operational logging and error reporting
-- [ ] Investigation status update interface
-- [ ] Evidence and case-reference management
-- [ ] Additional validated rule-to-ATT&CK mappings
-- [ ] Sanitized real-world alert validation
-- [ ] SENTINEL SOC Lab integration
-- [ ] Additional SIEM input adapters
+- [ ] Improved operational logging and error reporting.
+- [ ] Investigation status update interface.
+- [ ] Evidence and case-reference management.
+- [ ] Additional validated rule-to-ATT&CK mappings.
+- [ ] Sanitized real-world alert validation.
+- [ ] SENTINEL SOC Lab integration.
+- [ ] Additional SIEM input adapters.
 
 Future work will prioritize reliable Wazuh processing before expanding to other SIEM platforms.
 
@@ -349,4 +415,6 @@ Security Considerations
 
 Author
 
-andyydz | "GitHub" (https://github.com/andyydz)
+andyydz
+
+"GitHub" (https://github.com/andyydz)
