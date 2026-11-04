@@ -1,261 +1,242 @@
-# Python SOC Automation Engine — Integration Contract
+# Python SOC Automation Engine: Integration Contract
 
-> **Status: draft for human review.** This contract is **Proposed** and follows Architecture Specification v1.0. It describes the intended interface of the *future* engine. Today, only the Python function `parse_wazuh_alert(alert: dict[str, Any])` is **Implemented**. There is no JSON file loading, CLI, live Wazuh API connection, normalization, SHA-256 hashing or SENTINEL integration yet. The input requirements (section 2) and validation behavior (section 3) are finalized decisions, but they describe **Planned** behavior and are not claimed to be implemented.
+## 1. Purpose and implementation status
 
-| Label | Meaning |
-|---|---|
-| **Implemented** | Exists and is tested. |
-| **Planned** | Approved milestone, not yet built. |
-| **Proposed** | Contract detail not yet built or finally confirmed. |
+This document defines the file-based interface of Python SOC Automation Engine: what the engine accepts, what it produces, and what consumers can rely on. It describes the implemented engine at **schema version 1.2**.
 
-The contract is independent of any consuming system. SENTINEL, or any other tool, may consume the output; the engine does not depend on it.
+| Milestone | Capability | Status |
+|---|---|---|
+| 1. Standardized Alert Output | File ingestion, parsing and validation, `raw_alert` preservation, standardized envelope, UTC timestamps, optional SHA-256, warnings, UTF-8 BOM support | Implemented |
+| 2. Alert Enrichment | Optional local enrichment (`--enrich`) | Implemented |
+| 3. Investigation-Ready Output | `investigation` object, generated for every processed alert | Implemented |
+| 4. CLI and Integration Interface | `soc-automation` CLI, JSON output to stdout or file | Implemented |
 
----
+Field names and nesting in this document follow the implementation (`pipeline.py`, `investigation/builder.py`, `enrichment/engine.py`, `parser.py`, and `ingestion.py`). Where the implementation does not fix a type, value, or format, this document says so rather than guessing.
 
-## 1. Supported input
+The contract is independent of any consuming tool. The engine does not depend on SENTINEL or any other system.
+
+## 2. Supported input and input limitations
 
 | Item | Value |
 |---|---|
 | Format | JSON |
-| Unit | **One Wazuh alert per file** |
-| Origin | Alert exported to a file (`source.ingestion_type = "file_export"`) |
-| Encoding | UTF-8 (**Proposed**) |
-| Not supported | Live Wazuh API ingestion, multiple alerts per file, JSON Lines, other SIEM formats |
+| Unit | One exported Wazuh alert per file |
+| Source | A local file |
+| Encoding | UTF-8; a byte order mark is accepted (`utf-8-sig`) |
+| Top-level value | Must be a JSON object |
 
-Current state: the **Implemented** parser accepts a Python dictionary. File loading will be implemented separately (Milestone 4).
+Not supported: live Wazuh manager or API ingestion, multiple alerts per file, JSON Lines, and other SIEM formats. The engine processes exported files only.
 
----
+## 3. Input structure and validation
 
-## 2. Expected Wazuh input structure
+### Fields used
 
-Only the fields below are used by this contract. Other fields present in a Wazuh alert are preserved in `raw_alert` and otherwise ignored.
+Other fields in the alert are preserved in `raw_alert` and are not otherwise interpreted by the parser.
 
-| Field | Type | Used for | Requirement |
-|---|---|---|---|
-| `rule` | object | Rule data | **Required** object |
-| `rule.id` | string | Rule ID | **Required**, non-empty string |
-| `rule.level` | integer | Original severity | **Required** integer |
-| `rule.description` | string | Rule description | Optional string |
-| `agent` | object | Agent data | **Required** object |
-| `agent.name` | string | Agent name | Optional string |
-| `timestamp` | string | Original and normalized timestamp | Optional string |
+| Field | Requirement | Valid values |
+|---|---|---|
+| `rule` | Required | Dictionary |
+| `rule.id` | Required | Non-empty string |
+| `rule.level` | Required | Integer. A Python boolean is not accepted as an integer. |
+| `agent` | Required | Dictionary |
+| `rule.description` | Optional | String or null |
+| `agent.name` | Optional | String or null |
+| `timestamp` | Optional | String or null |
 
-Handling of optional fields:
+A missing or null `rule` or `agent`, and an invalid `rule.id` or `rule.level`, raise validation errors. A missing optional field is handled by the pipeline and recorded as a processing warning. Values of other types are not valid for the optional fields.
 
-- **Missing:** the corresponding output value is `null` and a warning is recorded.
-- **Present with an invalid type:** a validation error is reported (section 3).
+### Failure categories
 
-These requirements describe the **Planned** engine. How the currently **Implemented** parser handles each case should be confirmed against its code and tests.
+Exact error messages are not part of this contract.
 
----
-
-## 3. Input validation rules
-
-| # | Condition | Class | Result |
-|---|---|---|---|
-| 1 | File missing or unreadable | Fatal error | Stop; report. No output record. |
-| 2 | Content is not valid JSON | Fatal error | Stop; report. No output record. |
-| 3 | Top-level value is not an object | Fatal error | Stop; report. No output record. |
-| 4 | `rule` or `agent` missing, `null` or not an object | Validation error | Report field and reason. No output record. |
-| 5 | `rule.id` missing, not a string, or empty | Validation error | Report field and reason. No output record. |
-| 6 | `rule.level` missing or not an integer | Validation error | Report field and reason. No output record. |
-| 7 | Optional field present with an invalid type (`rule.description`, `agent.name` or `timestamp` not a string) | Validation error | Report field and reason. No output record. |
-| 8 | Optional field missing | Warning | Value `null`; warning recorded; output record still produced. |
-| 9 | `timestamp` is a string but malformed or ambiguous | Warning | Normalized timestamp `null`; warning recorded; output record still produced. |
-| 10 | Enrichment unavailable | Informational | Skipped with explanation. |
-| 11 | Output cannot be written | Reported error | State the path and reason. |
-
-Outcomes:
-
-- **Fatal errors (1–3) and validation errors (4–7) produce no normalized output record.** A clear error report is returned separately (section 8).
-- **Missing optional fields (8) and unparseable timestamp strings (9) still produce a valid output record** with `null` values and warnings.
-- A missing, `null` or malformed `rule` or `agent` object is handled by rule 4. It must **not** be silently converted to an empty dictionary, because that would turn a structural problem into an apparent missing-field warning.
-- **Proposed:** an optional field present with an explicit `null` is treated as missing (rule 8).
-
----
-
-## 4. Standardized output envelope (Proposed)
-
-| Section | Purpose |
+| Condition | Behavior |
 |---|---|
-| `schema_version` | Contract version, `"1.0"`. |
-| `record_type` | Identifies the record. Proposed value: `"normalized_alert"`. |
-| `source` | Origin metadata: system, `ingestion_type` and input file reference. |
-| `alert` | Normalized alert fields. |
-| `processing` | Engine name and version, outcome, warnings and optional `integrity` block. |
-| `raw_alert` | The authoritative preserved original parsed Wazuh alert, unmodified. |
-| `enrichment` | Optional. Derived data (Milestone 2). |
-| `investigation` | Optional. Investigation-ready data (Milestone 3). |
+| File cannot be read or decoded | Reported as an error. The CLI exits with a failure status. |
+| Content is not valid JSON | Reported as an error. The CLI exits with a failure status. |
+| Top-level JSON value is not an object | Reported as an error. The CLI exits with a failure status. |
+| Parser validation failure (required structure or field missing or invalid) | Reported as a validation error. The CLI exits with a failure status. |
+| Missing optional field or timestamp problem | Recorded in `processing.warnings`. Processing continues. |
+| Data-quality issue (enrichment enabled) | Recorded as signals in `enrichment.data_quality.signals`, not in `processing.warnings`. Processing continues. |
+| Enrichment error or unavailable dataset | Recorded in the enrichment status and `enrichment.provenance.errors` (section 8). |
+| Output file cannot be written | Reported as an error. The CLI exits with a failure status. |
 
-The envelope is produced only when processing succeeds, with or without warnings. Fatal and validation errors do not produce an envelope.
+## 4. Processing workflow
 
----
+1. The CLI receives a local JSON file path and the optional flags.
+2. Ingestion reads the original file bytes.
+3. If `--sha256` is set, the digest is calculated over those original bytes.
+4. The bytes are decoded as UTF-8 JSON (BOM supported), and the top-level value is checked to be an object.
+5. The pipeline parses and validates the alert.
+6. The pipeline normalizes it into the standardized envelope, including UTC timestamp normalization.
+7. If `--enrich` is set, the `enrichment` section is added.
+8. The pipeline always generates the `investigation` object.
+9. The CLI writes the JSON result to stdout or to the file given with `-o` / `--output`, creating missing output directories.
 
-## 5. Required and optional fields (Milestone 1)
+## 5. Standardized output envelope (schema 1.2)
 
-| Path | Required | Type | Nullable | Notes |
-|---|---|---|---|---|
-| `schema_version` | Yes | string | No | `"1.0"` |
-| `record_type` | Yes | string | No | |
-| `source.system` | Yes | string | No | `"wazuh"` |
-| `source.ingestion_type` | Yes | string | No | `"file_export"` |
-| `source.input_file.name` | Yes | string | No | File name only. |
-| `alert.rule_id` | Yes | string | No | From required `rule.id`; non-empty. |
-| `alert.severity` | Yes | integer | No | From required `rule.level`, unchanged. |
-| `alert.rule_description` | Yes | string | **Yes** | `null` + warning if missing. |
-| `alert.agent_name` | Yes | string | **Yes** | `null` + warning if missing. |
-| `alert.timestamp_original` | Yes | string | **Yes** | Exact input value; `null` + warning if missing. |
-| `alert.timestamp_utc` | Yes | string | **Yes** | UTC with `Z`; `null` + warning if missing, malformed or ambiguous. |
-| `processing.engine` | Yes | object | No | Name and version. |
-| `processing.status` | Yes | string | No | `"success"` or `"success_with_warnings"` (section 8). |
-| `processing.warnings` | Yes | array | No | May be empty. |
-| `processing.integrity` | Optional | object | — | Present only when SHA-256 is enabled. |
-| `raw_alert` | Yes | object | No | Authoritative preserved original. |
-| `enrichment` | Optional | object | — | Absent in Milestone 1. |
-| `investigation` | Optional | object | — | Absent in Milestone 1. |
+| Key | Presence | Value |
+|---|---|---|
+| `schema_version` | Always | `"1.2"` |
+| `record_type` | Always | `"normalized_alert"` |
+| `source` | Always | Object with `product` (`"Wazuh"`) and `ingestion_type` (`"file_export"`). |
+| `alert` | Always | Normalized alert fields (section 6). |
+| `processing` | Always | Object with `warnings` and `integrity`. |
+| `raw_alert` | Always | The original parsed alert, preserved without modification. |
+| `enrichment` | Only when `--enrich` is set | Derived enrichment data (section 8). |
+| `investigation` | Always | Investigation-ready object, generated whether or not enrichment is enabled (section 9). |
 
-"Required" means the key is always present. Nullable required keys hold `null` when the source value is unavailable.
+## 6. Field definitions and nullability
 
----
+| Path | Type | Nullable | Notes |
+|---|---|---|---|
+| `schema_version` | string | No | `"1.2"` |
+| `record_type` | string | No | `"normalized_alert"` |
+| `source.product` | string | No | `"Wazuh"` |
+| `source.ingestion_type` | string | No | `"file_export"` |
+| `alert.rule_id` | string | No | From `rule.id`. Non-empty. |
+| `alert.severity` | integer | No | From `rule.level`, unchanged. |
+| `alert.agent` | string | Yes | From `agent.name`. `null` when absent. |
+| `alert.description` | string | Yes | From `rule.description`. `null` when absent. |
+| `alert.timestamp_original` | string | Yes | The input `timestamp` value. `null` when absent. |
+| `alert.timestamp_utc` | string | Yes | The timestamp normalized to UTC. `null` when it cannot be normalized. |
+| `processing.warnings` | array | No | Processing warnings. May be empty. |
+| `processing.integrity` | object | Yes | `null` when SHA-256 is disabled (section 11). |
+| `raw_alert` | object | No | The original parsed alert. |
 
-## 6. Original alert preservation
+The textual form of `alert.timestamp_utc` (for example, a `Z` suffix or a `+00:00` offset) and the structure of individual warning entries are not specified by this contract. Verify them against actual output. Warning codes are not defined.
 
-- `raw_alert` is the **authoritative** preserved source object. It holds the original parsed Wazuh alert, with no fields added, removed or modified.
-- Fields in `alert` may retain values that correspond to the original (for example, `alert.severity` and `alert.timestamp_original`). They are convenience copies and are **not a substitute** for the original alert. If they differ in meaning from `raw_alert`, `raw_alert` is the source of truth.
-- Normalization never overwrites source data.
-- `alert.severity` keeps the original Wazuh severity. **No new priority or classification is derived in Milestone 1.**
-- `alert.timestamp_original` keeps the exact input string.
-
-`raw_alert` is the **parsed** alert. It is not a byte-for-byte copy of the input file. For byte-level comparison, use the optional SHA-256 in `processing.integrity` (section 9).
-
----
-
-## 7. Normalized versus derived data
+## 7. Original versus normalized data
 
 | Category | Location | Rule |
 |---|---|---|
-| Original source data | `raw_alert` | Verbatim and authoritative. |
-| Normalized fields | `alert` | Reformatting only. No new meaning added. |
-| Derived enrichment | `enrichment`, `investigation` | Optional, evidence-based, explainable. States its basis. |
-| Engine metadata | `source`, `processing` (including `processing.integrity`) | Describes the processing, not the alert. |
+| Original data | `raw_alert` | The preserved original parsed alert, without modification. Authoritative. |
+| Normalized fields | `alert` | Reformatting of source values, such as the UTC timestamp. Convenience copies that do not replace `raw_alert`. |
+| Derived data | `enrichment`, `investigation` | Produced by the engine. Not source data. |
+| Engine metadata | `source`, `processing` | Describes the origin and the processing, not the alert. |
 
-Derived data must not invent MITRE ATT&CK mappings or incident classifications. Missing values are never silently filled in.
+If `alert` and `raw_alert` ever differ in meaning, `raw_alert` is the source of truth. `raw_alert` is the parsed alert and is not a byte-for-byte copy of the input file. For byte-level comparison, use the SHA-256 digest.
 
----
+## 8. Optional enrichment structure and limitations
 
-## 8. Warnings and fatal errors
+Enrichment is added only when `--enrich` is set, and it uses only local datasets.
 
-### Warning object (Proposed)
-
-```json
-{
-  "code": "TIMESTAMP_MALFORMED",
-  "field": "timestamp",
-  "message": "Timestamp could not be parsed as ISO 8601 / RFC 3339; normalized timestamp set to null."
-}
-```
-
-| Code (Proposed) | Meaning |
+| Key | Content |
 |---|---|
-| `MISSING_OPTIONAL_FIELD` | An optional field is absent; value is `null`. |
-| `TIMESTAMP_MISSING` | No timestamp in the input. |
-| `TIMESTAMP_MALFORMED` | Timestamp cannot be parsed. |
-| `TIMESTAMP_AMBIGUOUS` | No timezone information; no timezone assumed. |
-| `ENRICHMENT_SKIPPED` | Enrichment unavailable; explanation provided. |
+| `status` | Overall enrichment status: `"complete"`, `"partial"`, or `"unavailable"`. The precise conditions for each value are not specified here. |
+| `rule_metadata` | Local Wazuh rule metadata lookup result: an object or `null`. Internal structure not specified here. |
+| `severity_context` | Engine-defined severity context with `original_level`, `severity_label`, and `classification_source`. |
+| `mitre_attack.techniques` | Technique results from the local MITRE ATT&CK dataset. |
+| `mitre_attack.tactics` | Tactic results from the local MITRE ATT&CK dataset. |
+| `mitre_attack.mapping_source` | Where the mapping came from. |
+| `data_quality.status` | Status of the data-quality checks: `"passed"` or `"issues_found"`. |
+| `data_quality.signals` | Data-quality signals raised for the alert. These are stored here, not in `processing.warnings`. |
+| `provenance.enrichment_engine_version` | Version of the enrichment engine. |
+| `provenance.methods` | Methods used. |
+| `provenance.sources` | Sources used. |
+| `provenance.processed_at` | When enrichment was processed. |
+| `provenance.errors` | Errors encountered during enrichment. |
 
-### Processing status
+### Severity context
 
-| `processing.status` | Meaning |
+These ranges are defined by this engine. They are not official Wazuh severity categories. The original rule level is preserved in `alert.severity` and `raw_alert`.
+
+| Rule level | Severity context |
 |---|---|
-| `"success"` | Record produced; `processing.warnings` is empty. |
-| `"success_with_warnings"` | Record produced; `processing.warnings` has at least one entry. |
+| 0 | Ignored |
+| 1 to 4 | Low |
+| 5 to 7 | Medium |
+| 8 to 11 | High |
+| 12 to 15 | Critical |
 
-There is no failure status inside the envelope. Fatal and validation errors produce no record.
+The severity context accepts integer levels from 0 through 15. A value outside this range causes the severity enrichment component to fail and may affect the overall enrichment status. Such a failure is an enrichment error (see `enrichment.provenance.errors`), not a change to the preserved original level.
 
-### Fatal and validation errors
+### Limitations
 
-Fatal errors (unreadable file, invalid JSON, non-object top level) and validation errors (section 3, rules 4–7) stop processing and are reported with a clear message, **separately from the output envelope**. No normalized output record is produced. Output write failures are also reported clearly. See the example error report in section 14.
+- The MITRE ATT&CK dataset currently has no verified rule mappings. The lookup mechanism exists, but no technique mappings are populated, so consumers should expect empty technique results.
+- Mappings are never inferred or fabricated. A mapping appears only if it exists in the local dataset.
+- Local datasets cover only what has been added to them and are not a complete copy of Wazuh's ruleset.
+- Enrichment is a decision aid, not an authoritative assessment.
 
-Exit codes and the exact error report format are **Planned** for Milestone 4.
+## 9. Investigation object structure
 
----
+The pipeline always generates `investigation`, with or without enrichment. It is a structured record, not case management.
 
-## 9. Optional SHA-256 metadata (Planned)
-
-SHA-256 is off by default. When enabled, the metadata is placed in **`processing.integrity`**:
-
-```json
-"processing": {
-  "integrity": {
-    "algorithm": "sha256",
-    "scope": "original_input_file_bytes",
-    "digest": "<64 hex characters>"
-  }
-}
-```
-
-| Field | Meaning |
+| Path | Initial value or content |
 |---|---|
-| `algorithm` | `"sha256"`. |
-| `scope` | `"original_input_file_bytes"`: the exact bytes of the input file, taken from the same buffer that is decoded as JSON. |
-| `digest` | Lowercase hexadecimal SHA-256 digest (**Proposed** encoding). |
+| `status` | `"new"` |
+| `summary` | Assigned directly from the alert description (`alert.description`). |
+| `affected_asset.agent_name` | Agent name, when available from the alert. |
+| `affected_asset.asset_identifier` | `null` unless supported by available data. |
+| `affected_asset.ip_address` | `null` unless supported by available data. |
+| `detection_details.rule_id` | Rule identifier. |
+| `detection_details.description` | Rule description. |
+| `detection_details.severity` | Original rule level. |
+| `detection_details.groups` | Rule groups. |
+| `detection_details.mitre_techniques` | MITRE techniques. Enrichment-derived. |
+| `detection_details.mitre_tactics` | MITRE tactics. Enrichment-derived. |
+| `priority.label` | Taken from `enrichment.severity_context.severity_label`. Enrichment-derived. |
+| `priority.reason` | Currently `null`. |
+| `priority.source` | Taken from `enrichment.severity_context.classification_source`. Enrichment-derived. |
+| `case_reference` | `null` |
+| `evidence` | Empty list |
+| `analyst_notes` | Empty list |
 
-- The input file is read **once** into a byte buffer. The digest is calculated from that same buffer, and the same buffer is then decoded as JSON. The file is not read a second time for hashing, so the digest always describes the exact bytes that were parsed.
-- Re-serialized JSON is never hashed and described as the original-file hash.
-- The `integrity` block is omitted when hashing is disabled.
-- The digest supports **integrity comparison** of the exact bytes processed: a holder of the same file can recompute it and compare.
-- It does **not** establish authenticity, and it does not prove that the source is trustworthy. It does not show who created the file or that the alert is genuine.
+When enrichment is disabled, enrichment-derived values may be empty or null. The engine does not invent asset information or analyst observations, and it does not create, look up, or manage cases. `evidence` and `analyst_notes` are placeholders for later analyst input.
 
----
+## 10. Processing warnings and errors
 
-## 10. Optional external case references (Planned, Milestone 3)
+**Warnings.** Non-fatal findings such as missing optional fields and timestamp problems are recorded in `processing.warnings` and do not stop processing. This contract does not define warning codes or a warning entry structure.
 
-Case correlation is optional. The engine can store a reference to a case held in an external system, without depending on that system.
+**Data-quality signals.** Data-quality issues are not stored in `processing.warnings`. When enrichment is enabled, they are recorded separately in `enrichment.data_quality.signals`, and `enrichment.data_quality.status` reports the result (section 8). When enrichment is disabled, no data-quality checks are reported.
 
-```json
-"investigation": {
-  "case_reference": {
-    "system": "external-case-system",
-    "id": "CASE-0001"
-  }
-}
-```
+**Errors.** Fatal conditions (section 3) are reported by the CLI with a failure status. This contract does not define error codes, exact messages, or an error payload format.
 
-- The engine records the reference as supplied. It does not create, look up or validate cases.
-- Omitted when not supplied.
-- Field names are **Proposed**.
+**Enrichment errors.** Enrichment problems are recorded in `enrichment.provenance.errors` and reflected in `enrichment.status`.
 
----
+## 11. Optional SHA-256 integrity metadata
 
-## 11. Schema version compatibility
+`processing.integrity` is always present in the output.
 
-- `"1.0"` is the **initial** contract version.
-- Consumers **must** check `schema_version` before reading other fields.
+| Condition | Value |
+|---|---|
+| `--sha256` not set | `null` |
+| `--sha256` set | Object with `algorithm` (`"SHA-256"`) and `hash` (the calculated digest). |
+
+- The digest is calculated over the exact original input file bytes, before JSON decoding, and not over re-serialized JSON.
+- The digest supports integrity comparison: anyone holding the same file can recompute it and compare.
+- The digest does **not** prove authenticity. It does not show who created the file, that the alert is genuine, or that the source is trustworthy.
+
+## 12. CLI usage and interface
+
+The package is configured in `pyproject.toml` and supports editable installation (`python -m pip install -e .`). It provides the `soc-automation` entry point. Run `soc-automation --help` for the full usage text.
+
+| Argument | Behavior |
+|---|---|
+| Input file (positional) | A local Wazuh JSON alert file. |
+| `-o`, `--output` | Write the JSON result to the specified file instead of stdout. Missing output directories are created automatically. |
+| `--sha256` | Calculate SHA-256 over the original input bytes and populate `processing.integrity`. |
+| `--enrich` | Add the `enrichment` section. |
+
+Without `-o` / `--output`, the JSON result is written to stdout. Errors are reported with a failure exit status. Specific exit codes are not defined by this contract.
+
+## 13. Schema compatibility
+
+- The current schema version is **1.2**.
+- Consumers should check `schema_version` before reading other fields.
 - Consumers should reject major versions they do not support.
-- Consumers **should ignore unknown optional fields**.
-- **Minor** version: additive optional fields.
-- **Major** version: breaking changes (field type changes, removals, changed semantics).
+- Consumers should ignore unknown optional fields.
+- Versioning policy: a minor version adds optional fields; a major version contains breaking changes, such as type changes, removals, or changed semantics.
+- Consumers should treat `processing.integrity` as nullable rather than testing for the key's absence.
 
----
+## 14. Sanitized example input and output
 
-## 12. Expected future file-based SENTINEL integration (Planned)
+All data is synthetic. Values in angle brackets are illustrative placeholders for content or formats that this contract does not specify, and they are not literal output.
 
-- SENTINEL may read the engine's output files, and may supply sanitized exported Wazuh alerts for Milestone 4 validation.
-- Exchange is **file-based**: input is one alert JSON file; output is one JSON envelope.
-- The engine has no dependency on SENTINEL and works with any file that meets section 1.
-- Any SENTINEL-specific logic lives on the consumer side, not in the engine.
-
-**Not implemented:** no SENTINEL integration exists today.
-
----
-
-## 13. Example valid input
-
-One Wazuh alert in one JSON file (illustrative, sanitized). The required fields are listed in section 2.
+### Example input
 
 ```json
 {
-  "timestamp": "2025-01-15T10:15:30.123+00:00",
+  "timestamp": "2025-01-15T10:15:30+00:00",
   "rule": {
     "id": "5710",
     "level": 5,
@@ -267,46 +248,32 @@ One Wazuh alert in one JSON file (illustrative, sanitized). The required fields 
 }
 ```
 
----
+### Output with no flags
 
-## 14. Example proposed normalized output (Milestone 1)
-
-This example assumes **SHA-256 is enabled**, so `processing.integrity` is present. When SHA-256 is disabled, `processing.integrity` is omitted.
+Enrichment and SHA-256 are disabled. `enrichment` is absent, `processing.integrity` is `null`, and `investigation` is still present with enrichment-derived values empty or null. The `summary` is taken directly from the alert description. The `groups` list and the exact `timestamp_utc` form are illustrative.
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.2",
   "record_type": "normalized_alert",
   "source": {
-    "system": "wazuh",
-    "ingestion_type": "file_export",
-    "input_file": {
-      "name": "alert-0001.json"
-    }
+    "product": "Wazuh",
+    "ingestion_type": "file_export"
   },
   "alert": {
     "rule_id": "5710",
     "severity": 5,
-    "rule_description": "sshd: attempt to login using a non-existent user",
-    "agent_name": "web-server-01",
-    "timestamp_original": "2025-01-15T10:15:30.123+00:00",
-    "timestamp_utc": "2025-01-15T10:15:30.123Z"
+    "agent": "web-server-01",
+    "description": "sshd: attempt to login using a non-existent user",
+    "timestamp_original": "2025-01-15T10:15:30+00:00",
+    "timestamp_utc": "2025-01-15T10:15:30Z"
   },
   "processing": {
-    "engine": {
-      "name": "python-soc-automation",
-      "version": "<engine version>"
-    },
-    "status": "success",
     "warnings": [],
-    "integrity": {
-      "algorithm": "sha256",
-      "scope": "original_input_file_bytes",
-      "digest": "<64 hex characters>"
-    }
+    "integrity": null
   },
   "raw_alert": {
-    "timestamp": "2025-01-15T10:15:30.123+00:00",
+    "timestamp": "2025-01-15T10:15:30+00:00",
     "rule": {
       "id": "5710",
       "level": 5,
@@ -315,116 +282,97 @@ This example assumes **SHA-256 is enabled**, so `processing.integrity` is presen
     "agent": {
       "name": "web-server-01"
     }
-  }
-}
-```
-
-`enrichment` and `investigation` are absent in Milestone 1. With SHA-256 disabled, the same record has no `processing.integrity` key.
-
-### Partial example: warnings (not a complete envelope)
-
-Input with no `timestamp` and no `rule.description`. All required fields are valid, so a record is produced.
-
-```json
-{
-  "rule": { "id": "5710", "level": 5 },
-  "agent": { "name": "web-server-01" }
-}
-```
-
-Relevant parts of the resulting record. This is a **partial** example: `schema_version`, `record_type`, `source`, `raw_alert` and other `processing` fields (such as `engine`) are omitted, and SHA-256 is assumed disabled, so there is no `processing.integrity`.
-
-```json
-{
-  "alert": {
-    "rule_id": "5710",
-    "severity": 5,
-    "rule_description": null,
-    "agent_name": "web-server-01",
-    "timestamp_original": null,
-    "timestamp_utc": null
   },
-  "processing": {
-    "status": "success_with_warnings",
-    "warnings": [
-      {
-        "code": "MISSING_OPTIONAL_FIELD",
-        "field": "rule.description",
-        "message": "Field is missing; value set to null."
-      },
-      {
-        "code": "TIMESTAMP_MISSING",
-        "field": "timestamp",
-        "message": "No timestamp in input; normalized timestamp set to null."
-      }
-    ]
+  "investigation": {
+    "status": "new",
+    "summary": "sshd: attempt to login using a non-existent user",
+    "affected_asset": {
+      "agent_name": "web-server-01",
+      "asset_identifier": null,
+      "ip_address": null
+    },
+    "detection_details": {
+      "rule_id": "5710",
+      "description": "sshd: attempt to login using a non-existent user",
+      "severity": 5,
+      "groups": [],
+      "mitre_techniques": [],
+      "mitre_tactics": []
+    },
+    "priority": {
+      "label": null,
+      "reason": null,
+      "source": null
+    },
+    "case_reference": null,
+    "evidence": [],
+    "analyst_notes": []
   }
 }
 ```
 
-### Example validation error (Proposed report format)
+### Output with `--sha256` and `--enrich`
 
-Input where `rule` is `null`, a structural error:
-
-```json
-{
-  "timestamp": "2025-01-15T10:15:30.123+00:00",
-  "rule": null,
-  "agent": { "name": "web-server-01" }
-}
-```
-
-No normalized output record is produced, and the engine does not substitute an empty dictionary. A separate error report is returned instead. The exact report format is **Planned** for Milestone 4.
+Only the sections that differ from the previous example are shown. For rule level 5, the severity context label is `"Medium"`, and `investigation.priority` is derived from it. The `severity_context` object shows its three keys. `rule_metadata` is shown as `null` for illustration, since its internal structure is not specified here, and the `enrichment` object includes placeholders where this contract does not specify the values. The empty `techniques` and `tactics` lists and the `null` `mapping_source` reflect the current dataset, which has no verified rule mappings.
 
 ```json
 {
-  "status": "validation_error",
-  "errors": [
-    {
-      "field": "rule",
-      "message": "Expected an object for 'rule' but found null."
+  "processing": {
+    "warnings": [],
+    "integrity": {
+      "algorithm": "SHA-256",
+      "hash": "<SHA-256 digest of the original input file bytes>"
     }
-  ]
-}
-```
-
-Input where an optional field has an invalid type (`agent.name` is a number) is also a validation error:
-
-```json
-{
-  "status": "validation_error",
-  "errors": [
-    {
-      "field": "agent.name",
-      "message": "Expected a string for 'agent.name' but found a number."
+  },
+  "enrichment": {
+    "status": "<complete | partial | unavailable>",
+    "rule_metadata": null,
+    "severity_context": {
+      "original_level": 5,
+      "severity_label": "Medium",
+      "classification_source": "python_soc_automation"
+    },
+    "mitre_attack": {
+      "techniques": [],
+      "tactics": [],
+      "mapping_source": null
+    },
+    "data_quality": {
+      "status": "<passed | issues_found>",
+      "signals": []
+    },
+    "provenance": {
+      "enrichment_engine_version": "<version>",
+      "methods": ["<method>"],
+      "sources": ["<source>"],
+      "processed_at": "<timestamp>",
+      "errors": []
     }
-  ]
+  },
+  "investigation": {
+    "priority": {
+      "label": "Medium",
+      "reason": null,
+      "source": "python_soc_automation"
+    }
+  }
 }
 ```
 
----
+## 15. Security considerations and integration boundaries
 
-## 15. Integration limitations and security considerations
+### Security
 
-### Limitations
+- Treat input files as untrusted. The engine validates them, and consumers should not execute any content from them.
+- `raw_alert` preserves the full original alert and may contain sensitive security information, such as hostnames, usernames, IP addresses, and log content.
+- Protect output files, and sanitize them before sharing or committing them to a repository.
+- SHA-256 supports integrity comparison only. It is not a signature and does not prove authenticity.
+- Do not place credentials, tokens, or secrets in input or output files.
 
-- One alert per file. No batching.
-- No live Wazuh API ingestion.
-- Wazuh only. Microsoft Sentinel, Splunk and Elastic Security are future expansion and out of the current scope.
-- Milestone 1 does not derive priority, classification or MITRE mappings.
-- Validation errors produce an error report and no output record.
-- Only parsing is **Implemented** today; the rest of this contract is **Planned** or **Proposed**.
-- Timestamps without timezone information are not normalized.
+### Integration boundaries
 
-### Security considerations
-
-- Treat input files as untrusted. Validate before use; do not execute any content.
-- Alerts may contain sensitive data (hostnames, usernames, IP addresses, log content). `raw_alert` preserves all of it. Protect output files accordingly and sanitize before sharing or committing to a repository.
-- SHA-256 supports integrity comparison of the exact bytes processed. It does not authenticate the source, provide a signature, or show that the source is trustworthy.
-- Do not place credentials, tokens or secrets in input or output files.
-- The engine does not execute response actions. Any disruptive action requires human approval.
-- Report file paths and errors without leaking more of the alert content than necessary.
-
-### Future expansion
-
-Support for Microsoft Sentinel, Splunk and Elastic Security may be considered later. This is not a current requirement and is not covered by this contract.
+- The engine processes exported Wazuh JSON files. It does not connect to a live Wazuh manager or Wazuh API.
+- It performs no autonomous incident response. Any disruptive response action requires human approval.
+- It is not a case-management platform. The `investigation` object is a structured record only.
+- SENTINEL SOC Lab is a separate project. A file-based exchange with SENTINEL is a future possibility and is not implemented.
+- Other SIEM platforms, such as Splunk, Elastic, and Microsoft Sentinel, are not current capabilities.
