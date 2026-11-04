@@ -28,10 +28,13 @@ def test_ingest_valid_wazuh_json_file(tmp_path):
 
     result = ingest_wazuh_alert_file(file_path)
 
-    assert result["schema_version"] == "1.0"
+    assert result["schema_version"] == "1.2"
     assert result["record_type"] == "normalized_alert"
     assert result["alert"]["rule_id"] == "550"
     assert result["raw_alert"] == alert
+
+    assert "investigation" in result
+    assert result["investigation"]["status"] == "new"
 
 
 def test_ingest_file_without_sha256(tmp_path):
@@ -94,6 +97,8 @@ def test_ingest_non_object_json_raises_error(tmp_path):
 
     with pytest.raises(ValueError, match="must contain an object"):
         ingest_wazuh_alert_file(file_path)
+
+
 def test_ingest_empty_json_file_raises_error(tmp_path):
     file_path = tmp_path / "empty.json"
     file_path.write_bytes(b"")
@@ -157,4 +162,4 @@ def test_ingest_sha256_matches_original_file_bytes(tmp_path):
 
     expected_hash = calculate_sha256(original_bytes)
 
-    assert result["processing"]["integrity"]["hash"] == expected_hash        
+    assert result["processing"]["integrity"]["hash"] == expected_hash

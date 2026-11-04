@@ -3,6 +3,7 @@ from typing import Any
 from soc_automation.parser import parse_wazuh_alert
 from soc_automation.normalizer import normalize_timestamp
 from soc_automation.enrichment.engine import enrich_alert
+from soc_automation.investigation.builder import build_investigation
 
 
 def process_wazuh_alert(
@@ -15,6 +16,8 @@ def process_wazuh_alert(
 
     Optionally includes SHA-256 integrity metadata
     and alert enrichment.
+
+    Every processed alert receives an investigation object.
     """
 
     # 1. Validate enrichment option
@@ -94,5 +97,19 @@ def process_wazuh_alert(
 
         result = enriched_result
 
-    # 10. Return the final result
+    # 10. Build investigation-ready output
+    investigation_input = {
+        **result["alert"],
+        "agent_name": result["alert"]["agent"],
+    }
+
+    result["investigation"] = build_investigation(
+        investigation_input,
+        enrichment=result.get("enrichment"),
+    )
+
+    # 11. Update the output schema version
+    result["schema_version"] = "1.2"
+
+    # 12. Return the final result
     return result
