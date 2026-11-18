@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from soc_automation.ingestion import ingest_wazuh_alert_file
+from soc_automation.triage import filter_by_severity, generate_summary_report
 
 
 def main() -> int:
@@ -12,7 +13,7 @@ def main() -> int:
 
     Accepts a Wazuh JSON alert file, processes it,
     and optionally enables enrichment, SHA-256,
-    and JSON output export.
+    alert triage, and output export.
     """
 
     parser = argparse.ArgumentParser(
@@ -27,7 +28,7 @@ def main() -> int:
     parser.add_argument(
         "-o",
         "--output",
-        help="Optional path to save the processed JSON output.",
+        help="Optional path to save the processed output.",
     )
 
     parser.add_argument(
@@ -42,9 +43,63 @@ def main() -> int:
         help="Enable alert enrichment using local datasets.",
     )
 
+    parser.add_argument(
+        "--triage",
+        action="store_true",
+        help="Enable severity triage filtering and summary report generation.",
+    )
+
+    parser.add_argument(
+        "--min-level",
+        type=int,
+        default=8,
+        help="Minimum Wazuh rule level threshold for triage (default: 8).",
+    )
+
+    parser.add_argument(
+        "--report-format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format for triage summary report ('markdown' or 'json', default: markdown).",
+    )
+
     args = parser.parse_args()
 
     try:
+        # Triage mode: filters alerts and generates aggregated summary report
+        if args.triage:
+            input_path = Path(args.input_file)
+            content = input_path.read_text(encoding="utf-8-sig")
+            data = json.loads(content)
+
+            alerts = data if isinstance(data, list) else [data]
+            triaged = filter_by_severity(alerts, min_level=args.min_level)
+            report = generate_summary_report(triaged, output_format=args.report_format)
+
+            report_str = (
+                json.dumps(report, indent=4)
+                if isinstance(report, dict)
+                else str(report)
+            )
+
+            if args.output:
+                output_path = Path(args.output)
+                output_path.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+                output_path.write_text(
+                    report_str + "\n",
+                    encoding="utf-8",
+                )
+                print("Successfully generated triage summary report.")
+                print(f"Output saved to: {output_path}")
+            else:
+                print(report_str)
+
+            return 0
+
+        # Normal mode: single alert ingestion & normalization pipeline
         # 1. Ingest and process the Wazuh alert
         result = ingest_wazuh_alert_file(
             file_path=args.input_file,

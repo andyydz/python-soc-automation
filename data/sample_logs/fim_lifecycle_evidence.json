@@ -1,0 +1,53 @@
+[
+  {
+    "timestamp": "2026-11-02T10:15:30.100Z",
+    "rule": {
+      "id": "100003",
+      "level": 8,
+      "description": "FIM: Controlled file creation detected"
+    },
+    "agent": {
+      "id": "002",
+      "name": "SENTINEL-LINUX01",
+      "ip": "10.10.10.40"
+    },
+    "syscheck": {
+      "path": "/home/sentinel-admin/sentinel-v03-controlled-test.txt",
+      "event": "added"
+    }
+  },
+  {
+    "timestamp": "2026-11-02T10:16:00.200Z",
+    "rule": {
+      "id": "100002",
+      "level": 8,
+      "description": "FIM: Controlled file modification detected"
+    },
+    "agent": {
+      "id": "002",
+      "name": "SENTINEL-LINUX01",
+      "ip": "10.10.10.40"
+    },
+    "syscheck": {
+      "path": "/home/sentinel-admin/sentinel-v03-controlled-test.txt",
+      "event": "modified"
+    }
+  },
+  {
+    "timestamp": "2026-11-02T10:16:30.300Z",
+    "rule": {
+      "id": "100004",
+      "level": 8,
+      "description": "FIM: Controlled file deletion detected"
+    },
+    "agent": {
+      "id": "002",
+      "name": "SENTINEL-LINUX01",
+      "ip": "10.10.10.40"
+    },
+    "syscheck": {
+      "path": "/home/sentinel-admin/sentinel-v03-controlled-test.txt",
+      "event": "deleted"
+    }
+  }
+]

@@ -9,21 +9,28 @@ A Python-based tool for processing exported Wazuh JSON alerts into structured, i
 
 ## Contents
 
-- [Why I Built This](#why-i-built-this)
-- [Overview and Scope](#overview-and-scope)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Technology Stack](#technology-stack)
-- [Installation and Quick Start](#installation-and-quick-start)
-- [CLI Usage](#cli-usage)
-- [Sample Output](#sample-output)
-- [Testing](#testing)
-- [Repository Structure](#repository-structure)
-- [Documentation](#documentation)
-- [Relationship to SENTINEL SOC Lab](#relationship-to-sentinel-soc-lab)
-- [Roadmap](#roadmap)
-- [Security Considerations](#security-considerations)
-- [Author](#author)
+- [Python SOC Automation Engine](#python-soc-automation-engine)
+  - [Contents](#contents)
+  - [Why I Built This](#why-i-built-this)
+  - [Overview and Scope](#overview-and-scope)
+  - [Features](#features)
+  - [Architecture](#architecture)
+    - [Output envelope (schema version `1.2`)](#output-envelope-schema-version-12)
+    - [Investigation object](#investigation-object)
+  - [Technology Stack](#technology-stack)
+  - [Installation and Quick Start](#installation-and-quick-start)
+  - [CLI Usage](#cli-usage)
+  - [Sample Output](#sample-output)
+    - [1. Normalized Alert Record (Schema `1.2`)](#1-normalized-alert-record-schema-12)
+    - [2. Triage Summary Table (Markdown Output)](#2-triage-summary-table-markdown-output)
+- [Wazuh FIM Triage Summary Report](#wazuh-fim-triage-summary-report)
+  - [Testing](#testing)
+  - [Repository Structure](#repository-structure)
+  - [Documentation](#documentation)
+  - [Relationship to SENTINEL SOC Lab](#relationship-to-sentinel-soc-lab)
+  - [Roadmap](#roadmap)
+  - [Security Considerations](#security-considerations)
+  - [Author](#author)
 
 ## Why I Built This
 
@@ -54,8 +61,9 @@ Security alerts often arrive as nested JSON with fields that may be missing, inc
 | Integrity (optional) | SHA-256 calculated over the original input file bytes, before decoding and JSON parsing |
 | Enrichment (optional) | Local Wazuh rule metadata, severity context, MITRE ATT&CK lookup, and data-quality checks |
 | Investigation | An investigation-ready object generated for every successfully processed alert, with or without enrichment |
-| Interface | CLI with JSON output to stdout or a file; flags for enrichment and integrity |
-| Testing | Automated tests for individual components and the integrated workflow |
+| Triage & Reporting | Severity threshold filtering (`--min-level`); aggregated summary reporting (rule frequency, descriptions, and affected paths) in Markdown tables or JSON |
+| Interface | CLI with JSON output to stdout or a file; flags for enrichment, integrity, and alert triage |
+| Testing | Automated tests for individual components, edge cases, triage aggregation, and the integrated workflow |
 
 **Severity context.** The original numeric Wazuh level is always preserved; the context band is added alongside it.
 
@@ -87,9 +95,11 @@ flowchart TD
     L --> M["Structured output<br/>(investigation object always included)"]
     A -.-> F["Optional SHA-256<br/>(original file bytes)"]
     F -.-> M
+    A -.-> N["Optional triage filter<br/>(--triage, --min-level)"]
+    N -.-> O["Summary report generator<br/>(Markdown / JSON tables)"]
 ```
 
-The investigation builder runs for every successfully processed alert. Dotted lines mark optional paths: enrichment results feed the investigation when enabled, and the SHA-256 digest is attached to the final output as integrity metadata.
+The investigation builder runs for every successfully processed alert. Dotted lines mark optional paths: enrichment results feed the investigation when enabled, SHA-256 digest is attached as integrity metadata, and the triage module aggregates batch alerts into analyst-facing summary tables.
 
 ### Output envelope (schema version `1.2`)
 
@@ -171,7 +181,10 @@ python -m soc_automation.cli data/sample_logs/wazuh_alert.json
 | `--help` | Display CLI help |
 | `--sha256` | Calculate SHA-256 of the original input file |
 | `--enrich` | Enable local alert enrichment |
-| `-o`, `--output` | Save processed JSON to a specified file |
+| `--triage` | Enable severity triage filtering and summary report generation |
+| `--min-level` | Minimum Wazuh rule level threshold for triage (default: `8`) |
+| `--report-format` | Output format for triage summary report (`markdown` or `json`, default: `markdown`) |
+| `-o`, `--output` | Save processed output to a specified file |
 
 ```powershell
 # SHA-256 integrity verification
@@ -183,15 +196,26 @@ soc-automation data/sample_logs/wazuh_alert.json --enrich
 # Export processed JSON (missing output directories are created automatically)
 soc-automation data/sample_logs/wazuh_alert.json --output reports/processed_alert.json
 
-# Combined options
+# Combined pipeline options
 soc-automation data/sample_logs/wazuh_alert.json --enrich --sha256 --output reports/enriched_alert.json
+
+# Generate Markdown triage summary report (default threshold: level >= 8)
+soc-automation data/sample_logs/fim_lifecycle_evidence.json --triage
+
+# Generate JSON triage report with custom severity threshold
+soc-automation data/sample_logs/fim_lifecycle_evidence.json --triage --min-level 5 --report-format json
+
+# Export triage summary report directly to file
+soc-automation data/sample_logs/fim_lifecycle_evidence.json --triage -o reports/triage_summary.md
 ```
 
 The CLI exits with `0` on successful processing and `1` on handled processing or file errors. Invalid arguments are handled by `argparse`.
 
 ## Sample Output
 
-A simplified illustration of the output structure. It is not a recorded execution result, and the `raw_alert`, `source`, `processing`, and optional `enrichment` fields are omitted.
+### 1. Normalized Alert Record (Schema `1.2`)
+
+A simplified illustration of the normalized envelope structure. The `raw_alert`, `source`, `processing`, and optional `enrichment` fields are omitted here for brevity:
 
 ```json
 {
@@ -233,11 +257,26 @@ A simplified illustration of the output structure. It is not a recorded executio
 }
 ```
 
+### 2. Triage Summary Table (Markdown Output)
+
+When `--triage` is used, the engine aggregates telemetry into structured summaries:
+
+# Wazuh FIM Triage Summary Report
+**Total Filtered Alerts:** 3 | **Unique Rules:** 3
+
+| Rule ID | Level | Frequency | Description | Monitored Target Path(s) |
+|:---:|:---:|:---:|:---|:---|
+| `100003` | 8 | 1 | FIM: Controlled file creation detected | `/home/sentinel-admin/sentinel-v03-controlled-test.txt` |
+| `100002` | 8 | 1 | FIM: Controlled file modification detected | `/home/sentinel-admin/sentinel-v03-controlled-test.txt` |
+| `100004` | 8 | 1 | FIM: Controlled file deletion detected | `/home/sentinel-admin/sentinel-v03-controlled-test.txt` |
+
 See [Sample Output](docs/sample-output.md) for additional examples.
 
 ## Testing
 
-pytest tests cover parsing and validation (including missing and malformed input), timestamp normalization, file ingestion, SHA-256 calculation, rule metadata, severity, MITRE lookup, data-quality checks, investigation generation, pipeline integration with and without enrichment, and CLI behavior (arguments, output, export, combined options, exit codes).
+pytest tests cover parsing and validation (including missing and malformed input), timestamp normalization, file ingestion, SHA-256 calculation, rule metadata, severity, MITRE lookup, data-quality checks, investigation generation, severity triage filtering, summary report generation, pipeline integration with and without enrichment, and CLI behavior (arguments, triage flags, output, export, combined options, exit codes).
+
+**166 automated unit and integration tests** passing:
 
 ```powershell
 python -m pytest -v
@@ -255,6 +294,7 @@ python-soc-automation/
 │   ├── wazuh_rules.json
 │   ├── mitre_attack.json
 │   └── sample_logs/
+│       ├── fim_lifecycle_evidence.json
 │       └── wazuh_alert.json
 ├── docs/
 │   ├── architecture.md
@@ -280,7 +320,8 @@ python-soc-automation/
 │       ├── integrity.py
 │       ├── normalizer.py
 │       ├── parser.py
-│       └── pipeline.py
+│       ├── pipeline.py
+│       └── triage.py
 ├── tests/
 │   ├── test_cli.py
 │   ├── test_data_quality.py
@@ -293,7 +334,8 @@ python-soc-automation/
 │   ├── test_parser.py
 │   ├── test_pipeline.py
 │   ├── test_rule_metadata.py
-│   └── test_severity.py
+│   ├── test_severity.py
+│   └── test_triage.py
 ├── .gitignore
 ├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
@@ -337,6 +379,7 @@ My long-term goal is for sanitized alert exports from SENTINEL to be processed b
 - [x] Investigation-ready output generation
 - [x] Pipeline integration and automated tests
 - [x] CLI with JSON export and options for enrichment and SHA-256, with tests
+- [x] Alert triage severity filtering and aggregated summary reporting (Markdown/JSON tables)
 
 **Planned**
 

@@ -63,6 +63,7 @@ def test_cli_help(monkeypatch, capsys):
     assert "--sha256" in captured.out
     assert "--enrich" in captured.out
     assert "--output" in captured.out
+    assert "--triage" in captured.out
 
 
 def test_cli_process_alert_to_stdout(
@@ -317,3 +318,125 @@ def test_cli_invalid_json_root(
 
     assert exit_code == 1
     assert "Error:" in captured.err
+
+
+def test_cli_triage_markdown_stdout(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    """Verify that --triage outputs a Markdown summary report to stdout."""
+
+    telemetry = [
+        {
+            "timestamp": "2026-11-02T10:15:30Z",
+            "rule": {"id": "100003", "level": 8, "description": "FIM File Created"},
+            "syscheck": {"path": "/home/sentinel-admin/test.txt"},
+        },
+        {
+            "timestamp": "2026-11-02T10:16:30Z",
+            "rule": {"id": "550", "level": 3, "description": "Checksum changed"},
+            "syscheck": {"path": "/etc/issue"},
+        },
+    ]
+
+    telemetry_file = tmp_path / "fim_telemetry.json"
+    telemetry_file.write_text(json.dumps(telemetry), encoding="utf-8")
+
+    exit_code = run_cli(
+        monkeypatch,
+        [str(telemetry_file), "--triage"],
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Wazuh FIM Triage Summary Report" in captured.out
+    assert "| `100003` | 8 | 1 |" in captured.out
+    assert "`/home/sentinel-admin/test.txt`" in captured.out
+    # Level 3 alert must be filtered out
+    assert "550" not in captured.out
+
+
+def test_cli_triage_json_custom_min_level(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    """Verify --triage with --report-format json and custom --min-level."""
+
+    telemetry = [
+        {
+            "timestamp": "2026-11-02T10:15:30Z",
+            "rule": {"id": "550", "level": 5, "description": "Medium severity event"},
+            "syscheck": {"path": "/etc/passwd"},
+        },
+        {
+            "timestamp": "2026-11-02T10:16:30Z",
+            "rule": {"id": "100", "level": 2, "description": "Low severity event"},
+            "syscheck": {"path": "/var/log/syslog"},
+        },
+    ]
+
+    telemetry_file = tmp_path / "custom_telemetry.json"
+    telemetry_file.write_text(json.dumps(telemetry), encoding="utf-8")
+
+    exit_code = run_cli(
+        monkeypatch,
+        [
+            str(telemetry_file),
+            "--triage",
+            "--min-level",
+            "5",
+            "--report-format",
+            "json",
+        ],
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    result = json.loads(captured.out)
+
+    assert result["total_alerts"] == 1
+    assert result["unique_rules"] == 1
+    assert "550" in result["rules"]
+    assert "100" not in result["rules"]
+
+
+def test_cli_triage_save_output_file(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    """Verify that --triage saves the report when --output is provided."""
+
+    telemetry = [
+        {
+            "timestamp": "2026-11-02T10:15:30Z",
+            "rule": {"id": "100004", "level": 8, "description": "FIM File Deleted"},
+            "syscheck": {"path": "/home/sentinel-admin/deleted.txt"},
+        }
+    ]
+
+    telemetry_file = tmp_path / "telemetry.json"
+    telemetry_file.write_text(json.dumps(telemetry), encoding="utf-8")
+
+    report_output = tmp_path / "reports" / "triage_summary.md"
+
+    exit_code = run_cli(
+        monkeypatch,
+        [
+            str(telemetry_file),
+            "--triage",
+            "--output",
+            str(report_output),
+        ],
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Successfully generated triage summary report." in captured.out
+    assert report_output.exists()
+    assert "| `100004` | 8 | 1 |" in report_output.read_text(encoding="utf-8")
