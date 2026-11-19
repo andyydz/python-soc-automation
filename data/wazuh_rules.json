@@ -167,6 +167,61 @@
           "T1105"
         ]
       }
+    },
+    "100130": {
+      "rule_id": "100130",
+      "level": 14,
+      "description": "SENTINEL Sysmon: LSASS access by scripting or LOLBin process",
+      "category": "windows",
+      "decoded_as": "json",
+      "groups": [
+        "sentinel",
+        "sysmon",
+        "windows",
+        "sentinel_sysmon_replay"
+      ],
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ]
+      }
+    },
+    "100131": {
+      "rule_id": "100131",
+      "level": 12,
+      "description": "SENTINEL Sysmon: Memory dump process access via rundll32 comsvcs/dbgcore",
+      "category": "windows",
+      "decoded_as": "json",
+      "groups": [
+        "sentinel",
+        "sysmon",
+        "windows",
+        "sentinel_sysmon_replay"
+      ],
+      "mitre": {
+        "techniques": [
+          "T1003.001",
+          "T1218.011"
+        ]
+      }
+    },
+    "100140": {
+      "rule_id": "100140",
+      "level": 10,
+      "description": "SENTINEL Sysmon: Dump file created by rundll32.exe",
+      "category": "windows",
+      "decoded_as": "json",
+      "groups": [
+        "sentinel",
+        "sysmon",
+        "windows",
+        "sentinel_sysmon_replay"
+      ],
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ]
+      }
     }
   }
 }
