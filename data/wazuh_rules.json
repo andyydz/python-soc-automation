@@ -32,7 +32,9 @@
         "tsc_CC7.3"
       ],
       "mitre": {
-        "techniques": ["T1492"]
+        "techniques": [
+          "T1492"
+        ]
       }
     },
     "553": {
@@ -59,7 +61,10 @@
         "tsc_CC7.3"
       ],
       "mitre": {
-        "techniques": ["T1107", "T1485"]
+        "techniques": [
+          "T1107",
+          "T1485"
+        ]
       }
     },
     "554": {
@@ -87,6 +92,80 @@
       ],
       "mitre": {
         "techniques": []
+      }
+    },
+    "100110": {
+      "rule_id": "100110",
+      "level": 12,
+      "description": "SENTINEL Sysmon: Suspicious shell spawned by svchost.exe",
+      "category": "windows",
+      "decoded_as": "json",
+      "groups": [
+        "sentinel",
+        "sysmon",
+        "windows",
+        "sentinel_sysmon_replay"
+      ],
+      "mitre": {
+        "techniques": [
+          "T1059.003"
+        ]
+      }
+    },
+    "100111": {
+      "rule_id": "100111",
+      "level": 10,
+      "description": "SENTINEL Sysmon: Suspicious Windows script execution",
+      "category": "windows",
+      "decoded_as": "json",
+      "groups": [
+        "sentinel",
+        "sysmon",
+        "windows",
+        "sentinel_sysmon_replay"
+      ],
+      "mitre": {
+        "techniques": [
+          "T1059.005"
+        ]
+      }
+    },
+    "100112": {
+      "rule_id": "100112",
+      "level": 13,
+      "description": "SENTINEL Sysmon: Memory dump via rundll32 comsvcs.dll MiniDump",
+      "category": "windows",
+      "decoded_as": "json",
+      "groups": [
+        "sentinel",
+        "sysmon",
+        "windows",
+        "sentinel_sysmon_replay"
+      ],
+      "mitre": {
+        "techniques": [
+          "T1003.001",
+          "T1218.011"
+        ]
+      }
+    },
+    "100120": {
+      "rule_id": "100120",
+      "level": 8,
+      "description": "SENTINEL Sysmon: PowerShell outbound connection",
+      "category": "windows",
+      "decoded_as": "json",
+      "groups": [
+        "sentinel",
+        "sysmon",
+        "windows",
+        "sentinel_sysmon_replay"
+      ],
+      "mitre": {
+        "techniques": [
+          "T1059.001",
+          "T1105"
+        ]
       }
     }
   }

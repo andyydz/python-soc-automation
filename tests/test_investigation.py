@@ -247,3 +247,9 @@ def test_build_investigation_rejects_empty_string_in_techniques(
 
     with pytest.raises(ValueError, match="techniques"):
         build_investigation(sample_alert, enrichment)
+
+def test_build_investigation_allows_none_enrichment_components(sample_alert):
+    enrichment = {"rule_metadata": None, "severity_context": None, "mitre_attack": None}
+    inv = build_investigation(sample_alert, enrichment=enrichment)
+    assert inv["detection_details"]["groups"] == []
+    assert inv["priority"]["label"] is None

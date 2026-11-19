@@ -184,3 +184,8 @@ The following are possibilities only. None is part of the current implementation
 - Live Wazuh API ingestion.
 
 Autonomous incident response and full case management are not part of the current scope. Any future disruptive response action would require human approval.
+
+### Validated SENTINEL Integration (Sysmon Replay)
+- **Datasets Updated:** Registered SENTINEL Sysmon custom rules (`100110`–`100140`) in `data/wazuh_rules.json` and `data/mitre_attack.json`.
+- **Verified Flow:** Single-alert JSON exports from `sentinel-soc-lab` (`evidence/sysmon-replay/sysmon_alerts_raw.json`) normalize cleanly with `--sha256 --enrich`.
+- **Known Scope Limit:** `ingestion.py` currently parses a single JSON object per file; native multi-line NDJSON ingestion for raw `alerts.json` streams remains planned for Phase 3.

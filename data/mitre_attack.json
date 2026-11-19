@@ -3,5 +3,75 @@
     "framework_version": "20.0",
     "source": "MITRE ATT&CK Enterprise",
     "description": "Local MITRE ATT&CK dataset used by the Python SOC Automation Engine for Wazuh alert enrichment.",
-    "rule_mappings": {}
+    "rule_mappings": {
+        "100110": {
+            "techniques": [
+                "T1059.003"
+            ],
+            "tactics": [
+                "Execution"
+            ],
+            "source": "SENTINEL Sysmon Replay Rules"
+        },
+        "100111": {
+            "techniques": [
+                "T1059.005"
+            ],
+            "tactics": [
+                "Execution"
+            ],
+            "source": "SENTINEL Sysmon Replay Rules"
+        },
+        "100112": {
+            "techniques": [
+                "T1003.001",
+                "T1218.011"
+            ],
+            "tactics": [
+                "Credential Access",
+                "Defense Evasion"
+            ],
+            "source": "SENTINEL Sysmon Replay Rules"
+        },
+        "100120": {
+            "techniques": [
+                "T1059.001",
+                "T1105"
+            ],
+            "tactics": [
+                "Execution",
+                "Command and Control"
+            ],
+            "source": "SENTINEL Sysmon Replay Rules"
+        },
+        "100130": {
+            "techniques": [
+                "T1003.001"
+            ],
+            "tactics": [
+                "Credential Access"
+            ],
+            "source": "SENTINEL Sysmon Replay Rules"
+        },
+        "100131": {
+            "techniques": [
+                "T1003.001",
+                "T1218.011"
+            ],
+            "tactics": [
+                "Credential Access",
+                "Defense Evasion"
+            ],
+            "source": "SENTINEL Sysmon Replay Rules"
+        },
+        "100140": {
+            "techniques": [
+                "T1003.001"
+            ],
+            "tactics": [
+                "Credential Access"
+            ],
+            "source": "SENTINEL Sysmon Replay Rules"
+        }
+    }
 }

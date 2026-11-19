@@ -55,9 +55,9 @@ def build_investigation(
         enrichment = {}
 
     # 3. Extract enrichment components
-    rule_metadata = enrichment.get("rule_metadata", {})
-    severity_context = enrichment.get("severity_context", {})
-    mitre_attack = enrichment.get("mitre_attack", {})
+    rule_metadata = {} if enrichment.get("rule_metadata") is None else enrichment.get("rule_metadata")
+    severity_context = {} if enrichment.get("severity_context") is None else enrichment.get("severity_context")
+    mitre_attack = {} if enrichment.get("mitre_attack") is None else enrichment.get("mitre_attack")
 
     # 4. Validate enrichment component types
     components = {
