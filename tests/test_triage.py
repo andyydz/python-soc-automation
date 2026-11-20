@@ -84,3 +84,45 @@ def test_generate_summary_report_markdown_and_dict(sample_fim_telemetry):
     # 3. Test empty report handling
     empty_md = generate_summary_report([], output_format="markdown")
     assert "No matching alerts found." in empty_md
+
+def test_v07_triage_context_noise_ssh_and_evasion():
+    """Verifies v0.7 triage context across FIM noise, hidden paths, SSH 100200, and evasion."""
+    from soc_automation.triage import build_v07_triage_context, format_v07_context_markdown
+
+    alerts = [
+        {
+            "timestamp": "2026-11-20T21:44:14.163+0530",
+            "rule": {"id": "100004", "level": 8, "description": "FIM deleted"},
+            "syscheck": {"path": "/home/sentinel-admin/.cache/tracker3/meta.db"},
+        },
+        {
+            "timestamp": "2026-11-20T21:45:00.000+0530",
+            "rule": {"id": "100003", "level": 8, "description": "FIM created"},
+            "syscheck": {"path": "/home/.v07-hidden-dir/.v07-payload.sh"},
+        },
+        {
+            "timestamp": "2026-11-20T21:46:00.000+0530",
+            "rule": {"id": "100200", "level": 5, "description": "SSH auth failed"},
+            "data": {"srcip": "192.168.56.101"},
+        },
+        {
+            "timestamp": "2026-11-20T21:46:10.000+0530",
+            "rule": {"id": "100200", "level": 5, "description": "SSH auth failed"},
+            "data": {"srcip": "192.168.56.101"},
+        },
+        {
+            "timestamp": "2026-11-20T21:47:00.000+0530",
+            "rule": {"id": "100112", "level": 10, "description": "LSASS access"},
+            "data": {"win": {"eventdata": {"Image": "C:\\Windows\\System32\\rundll32.exe", "CommandLine": "rundll32.exe comsvcs.dll, #24"}}},
+        },
+    ]
+
+    ctx = build_v07_triage_context(alerts)
+    assert "/home/sentinel-admin/.cache/tracker3/meta.db" in ctx["fim_noise_paths"]
+    assert "/home/.v07-hidden-dir/.v07-payload.sh" in ctx["fim_suspicious_paths"]
+    assert ctx["subthreshold_ssh_100200"] == {"192.168.56.101": 2}
+    assert len(ctx["evasion_indicators"]) == 1
+
+    md = format_v07_context_markdown(ctx)
+    assert "v0.7 Triage Context" in md
+    assert "192.168.56.101" in md

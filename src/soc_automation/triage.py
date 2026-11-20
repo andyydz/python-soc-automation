@@ -161,3 +161,118 @@ def generate_summary_report(
         return "\n".join(lines)
 
     return summary
+
+def _stringify_alert_blob(alert: Any) -> str:
+    """Safely serializes an alert structure for substring heuristic checks."""
+    if alert is None:
+        return ""
+    if isinstance(alert, str):
+        return alert
+    try:
+        return json.dumps(alert, default=str)
+    except (TypeError, ValueError):
+        return str(alert)
+
+
+def _extract_srcip(alert: Any) -> Optional[str]:
+    """Extracts source IP from raw or normalized Wazuh alert dictionaries."""
+    if not isinstance(alert, dict):
+        return None
+    target = alert.get("alert") if isinstance(alert.get("alert"), dict) else alert
+    if not isinstance(target, dict):
+        return None
+    data = target.get("data")
+    if isinstance(data, dict) and data.get("srcip"):
+        return str(data["srcip"])
+    return None
+
+
+def build_v07_triage_context(alerts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Derives v0.7-informed noise, sub-threshold SSH, and evasion context.
+
+    Evaluates across the provided alert list so low-severity or filtered events
+    (such as Level 5 SSH 100200 attempts or evasion-adjacent strings) remain
+    visible to analysts without altering severity-filtered alert lists.
+    """
+    context: Dict[str, Any] = {
+        "fim_noise_paths": [],
+        "fim_suspicious_paths": [],
+        "subthreshold_ssh_100200": {},
+        "evasion_indicators": [],
+    }
+    if not isinstance(alerts, list):
+        return context
+
+    noise_markers = ("/.cache/", "/tracker3", "/nautilus", "/gvfs")
+    ssh_counts_by_ip: Dict[str, int] = defaultdict(int)
+    seen_noise: set[str] = set()
+    seen_suspicious: set[str] = set()
+
+    for idx, alert in enumerate(alerts):
+        data = _extract_alert_data(alert)
+        rule_id = data["rule_id"]
+        path = data["file_path"]
+        blob_lower = _stringify_alert_blob(alert).lower()
+
+        # 1. FIM noise vs. suspicious path classification
+        if path != "N/A":
+            path_lower = path.lower()
+            if any(marker in path_lower for marker in noise_markers):
+                if path not in seen_noise:
+                    seen_noise.add(path)
+                    context["fim_noise_paths"].append(path)
+            elif "/." in path or path.startswith("/var/tmp/"):
+                if path not in seen_suspicious:
+                    seen_suspicious.add(path)
+                    context["fim_suspicious_paths"].append(path)
+
+        # 2. Sub-threshold SSH rule 100200 grouping by source IP
+        if rule_id == "100200":
+            srcip = _extract_srcip(alert) or "unknown_srcip"
+            ssh_counts_by_ip[srcip] += 1
+
+        # 3. Evasion-adjacent indicator (rundll32 / comsvcs without literal minidump)
+        has_lolbin = ("rundll32.exe" in blob_lower) or ("comsvcs.dll" in blob_lower)
+        if has_lolbin and "minidump" not in blob_lower:
+            context["evasion_indicators"].append(
+                {
+                    "index": idx,
+                    "rule_id": rule_id,
+                    "level": data["rule_level"],
+                    "reason": "LOLBin/DLL reference without literal minidump string (v0.7 evasion pattern)",
+                }
+            )
+
+    context["subthreshold_ssh_100200"] = dict(sorted(ssh_counts_by_ip.items()))
+    return context
+
+
+def format_v07_context_markdown(context: Dict[str, Any]) -> str:
+    """Renders v0.7 triage context as a readable Markdown section."""
+    noise_paths = context.get("fim_noise_paths", [])
+    suspicious_paths = context.get("fim_suspicious_paths", [])
+    ssh_ips = context.get("subthreshold_ssh_100200", {})
+    evasion = context.get("evasion_indicators", [])
+
+    lines = [
+        "## v0.7 Triage Context (Noise, Sub-Threshold SSH & Evasion)",
+        f"- **Likely FIM Noise Paths:** {', '.join(f'`{p}`' for p in noise_paths) if noise_paths else 'None detected'}",
+        f"- **Suspicious / Hidden FIM Paths:** {', '.join(f'`{p}`' for p in suspicious_paths) if suspicious_paths else 'None detected'}",
+    ]
+
+    if ssh_ips:
+        formatted_ips = ", ".join(f"`{ip}` ({cnt})" for ip, cnt in ssh_ips.items())
+        lines.append(f"- **SSH Rule 100200 Counts by Source IP:** {formatted_ips}")
+    else:
+        lines.append("- **SSH Rule 100200 Counts by Source IP:** None detected")
+
+    if evasion:
+        reasons = "; ".join(
+            f"rule `{item['rule_id']}` (level {item['level']}): {item['reason']}"
+            for item in evasion
+        )
+        lines.append(f"- **Evasion-Adjacent Indicators:** {reasons}")
+    else:
+        lines.append("- **Evasion-Adjacent Indicators:** None detected")
+
+    return "\n".join(lines)

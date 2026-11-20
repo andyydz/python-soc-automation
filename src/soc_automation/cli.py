@@ -68,19 +68,43 @@ def main() -> int:
     try:
         # Triage mode: filters alerts and generates aggregated summary report
         if args.triage:
+            from soc_automation.triage import (
+                build_v07_triage_context,
+                format_v07_context_markdown,
+            )
+
             input_path = Path(args.input_file)
             content = input_path.read_text(encoding="utf-8-sig")
-            data = json.loads(content)
+            try:
+                data = json.loads(content)
+                alerts = data if isinstance(data, list) else [data]
+            except json.JSONDecodeError:
+                alerts = []
+                for line_no, raw_line in enumerate(content.splitlines(), start=1):
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        alerts.append(json.loads(stripped))
+                    except json.JSONDecodeError as line_err:
+                        raise json.JSONDecodeError(
+                            f"Line {line_no}: {line_err.msg}",
+                            line_err.doc,
+                            line_err.pos,
+                        ) from line_err
+                if not alerts:
+                    raise json.JSONDecodeError("Empty NDJSON input", content, 0)
 
-            alerts = data if isinstance(data, list) else [data]
             triaged = filter_by_severity(alerts, min_level=args.min_level)
+            v07_context = build_v07_triage_context(alerts)
             report = generate_summary_report(triaged, output_format=args.report_format)
 
-            report_str = (
-                json.dumps(report, indent=4)
-                if isinstance(report, dict)
-                else str(report)
-            )
+            if args.report_format == "json":
+                payload = report if isinstance(report, dict) else json.loads(str(report))
+                payload["v07_triage_context"] = v07_context
+                report_str = json.dumps(payload, indent=4)
+            else:
+                report_str = f"{report}\n\n{format_v07_context_markdown(v07_context)}"
 
             if args.output:
                 output_path = Path(args.output)
