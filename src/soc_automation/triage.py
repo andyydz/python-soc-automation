@@ -42,11 +42,22 @@ def _extract_alert_data(alert: Any) -> Dict[str, Any]:
     except (ValueError, TypeError):
         level = -1
 
+    file_path = str(syscheck.get("path", "N/A"))
+    if file_path == "N/A":
+        data_obj = target.get("data") if isinstance(target.get("data"), dict) else {}
+        win_obj = data_obj.get("win") if isinstance(data_obj.get("win"), dict) else {}
+        eventdata = win_obj.get("eventdata") if isinstance(win_obj.get("eventdata"), dict) else {}
+        for key in ("targetFilename", "TargetFilename", "image", "Image", "targetImage", "TargetImage"):
+            val = eventdata.get(key)
+            if isinstance(val, str) and val.strip():
+                file_path = val.strip()
+                break
+
     return {
         "rule_id": str(rule.get("id", "UNKNOWN")),
         "rule_level": level,
         "rule_description": str(rule.get("description", "No description available")),
-        "file_path": str(syscheck.get("path", "N/A")),
+        "file_path": file_path,
         "timestamp": str(target.get("timestamp", "UNKNOWN")),
     }
 

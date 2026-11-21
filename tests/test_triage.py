@@ -126,3 +126,40 @@ def test_v07_triage_context_noise_ssh_and_evasion():
     md = format_v07_context_markdown(ctx)
     assert "v0.7 Triage Context" in md
     assert "192.168.56.101" in md
+
+
+def test_sysmon_replay_targets_in_summary_report():
+    """Verifies Sysmon eventdata image/target fields populate affected_paths when syscheck is absent."""
+    alerts = [
+        {
+            "timestamp": "2026-11-21T12:39:48.344+0530",
+            "rule": {"id": "100110", "level": 12, "description": "SENTINEL Sysmon: Suspicious shell"},
+            "data": {
+                "win": {
+                    "eventdata": {
+                        "image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                    }
+                }
+            },
+        },
+        {
+            "timestamp": "2026-11-21T12:46:33.672+0530",
+            "rule": {"id": "100140", "level": 10, "description": "SENTINEL Sysmon: Dump file created"},
+            "data": {
+                "win": {
+                    "eventdata": {
+                        "image": "C:\\Windows\\System32\\rundll32.exe",
+                        "targetFilename": "C:\\Windows\\System32\\lsass.dmp",
+                    }
+                }
+            },
+        },
+    ]
+
+    summary = generate_summary_report(alerts, output_format="dict")
+    assert summary["rules"]["100110"]["affected_paths"] == [
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    ]
+    assert summary["rules"]["100140"]["affected_paths"] == [
+        "C:\\Windows\\System32\\lsass.dmp"
+    ]
