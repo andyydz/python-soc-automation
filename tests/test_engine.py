@@ -395,3 +395,35 @@ def test_both_datasets_unavailable_handled_gracefully(
         "mitre_attack:" in error
         for error in errors
     )
+
+
+def test_enrich_alert_includes_offline_artifacts(monkeypatch):
+    """Verify enrich_alert() attaches extracted artifacts from raw_alert."""
+    patch_successful_components(monkeypatch)
+
+    alert_with_raw_artifacts = {
+        "schema_version": "1.0",
+        "record_type": "normalized_alert",
+        "alert": {
+            "rule_id": "100003",
+            "severity": 8,
+            "description": "FIM file created",
+            "agent_name": "SENTINEL-LINUX01",
+            "timestamp_utc": "2026-11-02T10:15:30Z",
+        },
+        "raw_alert": {
+            "rule": {"id": "100003", "level": 8},
+            "syscheck": {"path": "/home/sentinel-admin/.ssh/authorized_keys"},
+            "data": {"srcip": "192.168.1.50"},
+        },
+    }
+
+    result = engine.enrich_alert(alert_with_raw_artifacts)
+    assert result["enrichment"]["artifacts"]["file_paths"] == [
+        "/home/sentinel-admin/.ssh/authorized_keys"
+    ]
+    assert result["enrichment"]["artifacts"]["ip_addresses"] == ["192.168.1.50"]
+    assert (
+        "offline_alert_artifact_extraction"
+        in result["enrichment"]["provenance"]["methods"]
+    )

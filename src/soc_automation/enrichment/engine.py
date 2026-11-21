@@ -16,6 +16,9 @@ from soc_automation.enrichment.mitre import (
 from soc_automation.enrichment.data_quality import (
     evaluate_alert_quality,
 )
+from soc_automation.enrichment.artifacts import (
+    extract_artifacts,
+)
 
 
 def enrich_alert(
@@ -55,6 +58,12 @@ def enrich_alert(
         "data_quality": {
             "status": "not_evaluated",
             "signals": [],
+        },
+        "artifacts": {
+            "file_paths": [],
+            "process_images": [],
+            "target_process_images": [],
+            "ip_addresses": [],
         },
         "provenance": {
             "enrichment_engine_version": "0.1.0",
@@ -158,7 +167,16 @@ def enrich_alert(
     except (ValueError, TypeError) as exc:
         errors.append(f"data_quality: {exc}")
 
-    # 5. Determine enrichment status.
+    # 5. Offline artifact extraction.
+    try:
+        enrichment["artifacts"] = extract_artifacts(alert)
+        enrichment["provenance"]["methods"].append(
+            "offline_alert_artifact_extraction"
+        )
+    except (TypeError, ValueError) as exc:
+        errors.append(f"artifacts: {exc}")
+
+    # 6. Determine enrichment status.
     # Data-quality evaluation is independent of enrichment success.
     successful_components = sum([
         "local_wazuh_rule_id_lookup"
