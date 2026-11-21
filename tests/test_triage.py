@@ -128,38 +128,70 @@ def test_v07_triage_context_noise_ssh_and_evasion():
     assert "192.168.56.101" in md
 
 
-def test_sysmon_replay_targets_in_summary_report():
-    """Verifies Sysmon eventdata image/target fields populate affected_paths when syscheck is absent."""
-    alerts = [
-        {
-            "timestamp": "2026-11-21T12:39:48.344+0530",
-            "rule": {"id": "100110", "level": 12, "description": "SENTINEL Sysmon: Suspicious shell"},
-            "data": {
-                "win": {
-                    "eventdata": {
-                        "image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
-                    }
-                }
-            },
-        },
-        {
-            "timestamp": "2026-11-21T12:46:33.672+0530",
-            "rule": {"id": "100140", "level": 10, "description": "SENTINEL Sysmon: Dump file created"},
-            "data": {
-                "win": {
-                    "eventdata": {
-                        "image": "C:\\Windows\\System32\\rundll32.exe",
-                        "targetFilename": "C:\\Windows\\System32\\lsass.dmp",
-                    }
-                }
-            },
-        },
-    ]
+def test_sysmon_eid_semantics_and_timestamps():
+    """Separates process/target images, target files, and alert vs. event timestamps."""
+    from soc_automation.triage import _extract_alert_data
 
-    summary = generate_summary_report(alerts, output_format="dict")
-    assert summary["rules"]["100110"]["affected_paths"] == [
-        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
-    ]
-    assert summary["rules"]["100140"]["affected_paths"] == [
-        "C:\\Windows\\System32\\lsass.dmp"
-    ]
+    eid1_alert = {
+        "timestamp": "2026-11-21T12:39:48.344+0530",
+        "rule": {"id": "100110", "level": 12, "description": "SENTINEL Sysmon: Suspicious shell"},
+        "syscheck": {"path": None},
+        "data": {
+            "win": {
+                "system": {"systemTime": "2026-11-21T07:09:40.1000000Z"},
+                "eventdata": {
+                    "image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                },
+            }
+        },
+    }
+    eid10_alert = {
+        "timestamp": "2026-11-21T12:42:10.000+0530",
+        "rule": {"id": "100130", "level": 12, "description": "SENTINEL Sysmon: Process access"},
+        "syscheck": {"path": "   "},
+        "data": {
+            "win": {
+                "system": {"systemTime": "2026-11-21T07:12:05.0000000Z"},
+                "eventdata": {
+                    "sourceImage": "C:\\Windows\\System32\\rundll32.exe",
+                    "targetImage": "C:\\Windows\\System32\\lsass.exe",
+                },
+            }
+        },
+    }
+    eid11_alert = {
+        "timestamp": "2026-11-21T12:46:33.672+0530",
+        "rule": {"id": "100140", "level": 10, "description": "SENTINEL Sysmon: Dump file created"},
+        "data": {
+            "win": {
+                "system": {"systemTime": "2026-11-21T07:16:30.0000000Z"},
+                "eventdata": {
+                    "image": "C:\\Windows\\System32\\rundll32.exe",
+                    "targetFilename": "C:\\Windows\\System32\\lsass.dmp",
+                },
+            }
+        },
+    }
+
+    d1 = _extract_alert_data(eid1_alert)
+    assert d1["fim_path"] is None
+    assert d1["process_image"] == "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    assert d1["file_path"] == "N/A"
+    assert d1["alert_timestamp"] == "2026-11-21T12:39:48.344+0530"
+    assert d1["event_timestamp"] == "2026-11-21T07:09:40.1000000Z"
+
+    d10 = _extract_alert_data(eid10_alert)
+    assert d10["fim_path"] is None
+    assert d10["process_image"] == "C:\\Windows\\System32\\rundll32.exe"
+    assert d10["target_process_image"] == "C:\\Windows\\System32\\lsass.exe"
+    assert d10["file_path"] == "N/A"
+
+    d11 = _extract_alert_data(eid11_alert)
+    assert d11["target_file"] == "C:\\Windows\\System32\\lsass.dmp"
+    assert d11["process_image"] == "C:\\Windows\\System32\\rundll32.exe"
+    assert d11["file_path"] == "C:\\Windows\\System32\\lsass.dmp"
+
+    summary = generate_summary_report([eid1_alert, eid10_alert, eid11_alert], output_format="dict")
+    assert summary["rules"]["100110"]["affected_paths"] == []
+    assert summary["rules"]["100130"]["affected_paths"] == []
+    assert summary["rules"]["100140"]["affected_paths"] == ["C:\\Windows\\System32\\lsass.dmp"]

@@ -42,23 +42,47 @@ def _extract_alert_data(alert: Any) -> Dict[str, Any]:
     except (ValueError, TypeError):
         level = -1
 
-    file_path = str(syscheck.get("path", "N/A"))
-    if file_path == "N/A":
-        data_obj = target.get("data") if isinstance(target.get("data"), dict) else {}
-        win_obj = data_obj.get("win") if isinstance(data_obj.get("win"), dict) else {}
-        eventdata = win_obj.get("eventdata") if isinstance(win_obj.get("eventdata"), dict) else {}
-        for key in ("targetFilename", "TargetFilename", "image", "Image", "targetImage", "TargetImage"):
-            val = eventdata.get(key)
+    def _first_non_empty(mapping: Dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
+        for key in keys:
+            val = mapping.get(key)
             if isinstance(val, str) and val.strip():
-                file_path = val.strip()
-                break
+                return val.strip()
+        return None
+
+    raw_fim_path = syscheck.get("path")
+    fim_path = raw_fim_path.strip() if isinstance(raw_fim_path, str) and raw_fim_path.strip() else None
+
+    data_obj = target.get("data") if isinstance(target.get("data"), dict) else {}
+    win_obj = data_obj.get("win") if isinstance(data_obj.get("win"), dict) else {}
+    system_obj = win_obj.get("system") if isinstance(win_obj.get("system"), dict) else {}
+    eventdata = win_obj.get("eventdata") if isinstance(win_obj.get("eventdata"), dict) else {}
+
+    target_file = _first_non_empty(eventdata, ("targetFilename", "TargetFilename"))
+    process_image = _first_non_empty(
+        eventdata, ("image", "Image", "sourceImage", "SourceImage")
+    )
+    target_process_image = _first_non_empty(eventdata, ("targetImage", "TargetImage"))
+
+    # affected_paths / file_path only reflect file targets, never process/target images
+    file_path = fim_path or target_file or "N/A"
+
+    alert_timestamp = str(target.get("timestamp", "UNKNOWN"))
+    event_timestamp = _first_non_empty(system_obj, ("systemTime", "SystemTime")) or _first_non_empty(
+        eventdata, ("UtcTime", "utcTime")
+    )
 
     return {
         "rule_id": str(rule.get("id", "UNKNOWN")),
         "rule_level": level,
         "rule_description": str(rule.get("description", "No description available")),
         "file_path": file_path,
-        "timestamp": str(target.get("timestamp", "UNKNOWN")),
+        "fim_path": fim_path,
+        "target_file": target_file,
+        "process_image": process_image,
+        "target_process_image": target_process_image,
+        "timestamp": alert_timestamp,
+        "alert_timestamp": alert_timestamp,
+        "event_timestamp": event_timestamp,
     }
 
 
@@ -132,8 +156,8 @@ def generate_summary_report(
         rule_entry["description"] = data["rule_description"]
         if data["file_path"] != "N/A":
             rule_entry["target_files"].add(data["file_path"])
-        if data["timestamp"] != "UNKNOWN":
-            rule_entry["timestamps"].append(data["timestamp"])
+        if data["alert_timestamp"] != "UNKNOWN":
+            rule_entry["timestamps"].append(data["alert_timestamp"])
 
     # Prepare standard dictionary output
     formatted_rules: Dict[str, Any] = {}
