@@ -32,6 +32,28 @@ def _validate_string_list(
     return list(value)
 
 
+from soc_automation.enrichment.artifacts import extract_artifacts
+
+
+def _extract_investigation_artifacts(
+    alert: dict[str, Any],
+    enrichment: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Returns normalized artifact lists from enrichment or alert fallback."""
+    keys = (
+        "file_paths",
+        "process_images",
+        "target_process_images",
+        "ip_addresses",
+    )
+    raw_artifacts = enrichment.get("artifacts")
+    source = raw_artifacts if isinstance(raw_artifacts, dict) else extract_artifacts(alert)
+    return {
+        key: _validate_string_list(source.get(key, []), key)
+        for key in keys
+    }
+
+
 def build_investigation(
     alert: dict[str, Any],
     enrichment: dict[str, Any] | None = None,
@@ -92,6 +114,8 @@ def build_investigation(
         "tactics",
     )
 
+    artifacts = _extract_investigation_artifacts(alert, enrichment)
+
     # 7. Build investigation-ready output
     investigation = {
         "status": "new",
@@ -100,7 +124,11 @@ def build_investigation(
         "affected_asset": {
             "agent_name": agent_name,
             "asset_identifier": None,
-            "ip_address": None,
+            "ip_address": (
+                artifacts["ip_addresses"][0]
+                if artifacts["ip_addresses"]
+                else None
+            ),
         },
 
         "detection_details": {
@@ -121,7 +149,11 @@ def build_investigation(
         },
 
         "case_reference": None,
-        "evidence": [],
+        "evidence": [
+            {"type": kind, "value": val}
+            for kind, vals in artifacts.items()
+            for val in vals
+        ],
         "analyst_notes": [],
     }
 

@@ -253,3 +253,34 @@ def test_build_investigation_allows_none_enrichment_components(sample_alert):
     inv = build_investigation(sample_alert, enrichment=enrichment)
     assert inv["detection_details"]["groups"] == []
     assert inv["priority"]["label"] is None
+
+
+def test_build_investigation_includes_artifacts_and_evidence():
+    from soc_automation.triage import generate_summary_report
+
+    alert = {
+        "rule_id": "100130",
+        "severity": 12,
+        "description": "Sysmon process access",
+        "agent_name": "WIN10-ENDPOINT",
+        "raw_alert": {
+            "data": {
+                "srcip": "10.10.10.25",
+                "win": {
+                    "eventdata": {
+                        "image": "C:\\Windows\\System32\\rundll32.exe",
+                        "targetImage": "C:\\Windows\\System32\\lsass.exe",
+                        "targetFilename": "C:\\Temp\\lsass.dmp",
+                    }
+                },
+            }
+        },
+    }
+    inv = build_investigation(alert)
+    assert inv["affected_asset"]["ip_address"] == "10.10.10.25"
+    assert {"type": "ip_addresses", "value": "10.10.10.25"} in inv["evidence"]
+    assert {"type": "file_paths", "value": "C:\\Temp\\lsass.dmp"} in inv["evidence"]
+
+    md = generate_summary_report([alert], output_format="markdown")
+    assert "## Extracted Artifacts" in md
+    assert "10.10.10.25" in md

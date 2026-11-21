@@ -248,6 +248,16 @@ def generate_summary_report(
             lines.append(
                 f"- **`{r_id}`:** Process: `{procs}` | Target Process: `{target_procs}` | Event Time: `{ev_times}`"
             )
+        art = summary["artifacts"]
+        lines.extend([
+            "",
+            "## Extracted Artifacts",
+            "",
+            f"- **IP Addresses:** {', '.join(art['ip_addresses']) if art['ip_addresses'] else 'None'}",
+            f"- **File Paths:** {', '.join(art['file_paths']) if art['file_paths'] else 'None'}",
+            f"- **Process Images:** {', '.join(art['process_images']) if art['process_images'] else 'None'}",
+            f"- **Target Process Images:** {', '.join(art['target_process_images']) if art['target_process_images'] else 'None'}",
+        ])
         return "\n".join(lines)
 
     return summary
