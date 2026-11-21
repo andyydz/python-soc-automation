@@ -440,3 +440,75 @@ def test_cli_triage_save_output_file(
     assert "Successfully generated triage summary report." in captured.out
     assert report_output.exists()
     assert "| `100004` | 8 | 1 |" in report_output.read_text(encoding="utf-8")
+
+
+def test_cli_triage_sysmon_process_and_malformed_records(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    """Verify --triage surfaces process/event context and tolerates malformed records."""
+    telemetry = [
+        None,
+        {},
+        {
+            "timestamp": "2026-11-21T07:10:00.000+0530",
+            "rule": {
+                "id": "100130",
+                "level": 12,
+                "description": "Sysmon LSASS process access",
+            },
+            "data": {
+                "win": {
+                    "eventdata": {
+                        "utcTime": "2026-11-21 01:40:00.123",
+                        "sourceImage": "C:\\Windows\\System32\\rundll32.exe",
+                        "targetImage": "C:\\Windows\\System32\\lsass.exe",
+                    }
+                }
+            },
+        },
+    ]
+
+    telemetry_file = tmp_path / "sysmon_mixed.json"
+    telemetry_file.write_text(json.dumps(telemetry), encoding="utf-8")
+
+    # 1. JSON format check
+    exit_code_json = run_cli(
+        monkeypatch,
+        [
+            str(telemetry_file),
+            "--triage",
+            "--min-level",
+            "8",
+            "--report-format",
+            "json",
+        ],
+    )
+    captured_json = capsys.readouterr()
+    assert exit_code_json == 0
+    parsed = json.loads(captured_json.out)
+    assert parsed["total_alerts"] == 1
+    rule_100130 = parsed["rules"]["100130"]
+    assert rule_100130["process_images"] == ["C:\\Windows\\System32\\rundll32.exe"]
+    assert rule_100130["target_process_images"] == ["C:\\Windows\\System32\\lsass.exe"]
+    assert rule_100130["event_timestamps"] == ["2026-11-21 01:40:00.123"]
+
+    # 2. Markdown format check
+    exit_code_md = run_cli(
+        monkeypatch,
+        [
+            str(telemetry_file),
+            "--triage",
+            "--min-level",
+            "8",
+            "--report-format",
+            "markdown",
+        ],
+    )
+    captured_md = capsys.readouterr()
+    assert exit_code_md == 0
+    assert "Process & Event Timestamp Context" in captured_md.out
+    assert "C:\\Windows\\System32\\rundll32.exe" in captured_md.out
+    assert "C:\\Windows\\System32\\lsass.exe" in captured_md.out
+    assert "2026-11-21 01:40:00.123" in captured_md.out
