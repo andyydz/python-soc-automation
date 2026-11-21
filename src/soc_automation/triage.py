@@ -117,6 +117,28 @@ def filter_by_severity(
     return triaged_alerts
 
 
+from soc_automation.enrichment.artifacts import extract_artifacts
+
+
+def collect_triage_artifacts(alerts: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    """Aggregates deduplicated, sorted artifacts across a list of alerts."""
+    merged = {
+        "file_paths": set(),
+        "process_images": set(),
+        "target_process_images": set(),
+        "ip_addresses": set(),
+    }
+    if not isinstance(alerts, list):
+        return {k: [] for k in merged}
+
+    for alert in alerts:
+        found = extract_artifacts(alert)
+        for key in merged:
+            merged[key].update(found.get(key, []))
+
+    return {k: sorted(v) for k, v in merged.items()}
+
+
 def generate_summary_report(
     alerts: List[Dict[str, Any]], 
     output_format: str = "dict"
@@ -193,6 +215,7 @@ def generate_summary_report(
         "total_alerts": len(alerts),
         "unique_rules": len(formatted_rules),
         "rules": formatted_rules,
+        "artifacts": collect_triage_artifacts(alerts),
     }
 
     if output_format == "json":

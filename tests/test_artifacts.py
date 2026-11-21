@@ -47,3 +47,29 @@ def test_extract_artifacts_handles_malformed_and_empty_inputs():
     }
     assert extract_artifacts({})["file_paths"] == []
     assert extract_artifacts({"syscheck": {"path": "   "}, "data": {"srcip": ""}})["ip_addresses"] == []
+
+
+def test_collect_triage_artifacts_and_summary():
+    from soc_automation.triage import generate_summary_report
+
+    alerts = [
+        {
+            "timestamp": "2026-11-21T07:10:00Z",
+            "rule": {"id": "100130", "level": 12, "description": "Sysmon process access"},
+            "data": {
+                "srcip": "10.0.0.5",
+                "win": {
+                    "eventdata": {
+                        "image": "C:\\Windows\\System32\\rundll32.exe",
+                        "targetImage": "C:\\Windows\\System32\\lsass.exe",
+                        "targetFilename": "C:\\Temp\\dump.dmp",
+                    }
+                },
+            },
+        }
+    ]
+    summary = generate_summary_report(alerts, output_format="dict")
+    assert summary["artifacts"]["ip_addresses"] == ["10.0.0.5"]
+    assert summary["artifacts"]["file_paths"] == ["C:\\Temp\\dump.dmp"]
+    assert summary["artifacts"]["process_images"] == ["C:\\Windows\\System32\\rundll32.exe"]
+    assert summary["artifacts"]["target_process_images"] == ["C:\\Windows\\System32\\lsass.exe"]
