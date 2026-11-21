@@ -193,8 +193,19 @@ def test_sysmon_eid_semantics_and_timestamps():
 
     summary = generate_summary_report([eid1_alert, eid10_alert, eid11_alert], output_format="dict")
     assert summary["rules"]["100110"]["affected_paths"] == []
+    assert summary["rules"]["100110"]["process_images"] == [
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    ]
+    assert summary["rules"]["100110"]["event_timestamps"] == ["2026-11-21T07:09:40.1000000Z"]
     assert summary["rules"]["100130"]["affected_paths"] == []
+    assert summary["rules"]["100130"]["process_images"] == ["C:\\Windows\\System32\\rundll32.exe"]
+    assert summary["rules"]["100130"]["target_process_images"] == ["C:\\Windows\\System32\\lsass.exe"]
     assert summary["rules"]["100140"]["affected_paths"] == ["C:\\Windows\\System32\\lsass.dmp"]
+
+    md = generate_summary_report([eid1_alert, eid10_alert], output_format="markdown")
+    assert "Process & Event Timestamp Context" in md
+    assert "2026-11-21T07:09:40.1000000Z" in md
+    assert "C:\\Windows\\System32\\lsass.exe" in md
 
 
 def test_malformed_and_mixed_records_in_summary_report():

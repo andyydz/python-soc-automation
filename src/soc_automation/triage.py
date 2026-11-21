@@ -148,6 +148,9 @@ def generate_summary_report(
             "description": "",
             "frequency": 0,
             "target_files": set(),
+            "process_images": set(),
+            "target_process_images": set(),
+            "event_timestamps": set(),
             "timestamps": [],
         }
     )
@@ -162,6 +165,12 @@ def generate_summary_report(
         rule_entry["description"] = data["rule_description"]
         if data["file_path"] != "N/A":
             rule_entry["target_files"].add(data["file_path"])
+        if data.get("process_image"):
+            rule_entry["process_images"].add(data["process_image"])
+        if data.get("target_process_image"):
+            rule_entry["target_process_images"].add(data["target_process_image"])
+        if data.get("event_timestamp"):
+            rule_entry["event_timestamps"].add(data["event_timestamp"])
         if data["alert_timestamp"] != "UNKNOWN":
             rule_entry["timestamps"].append(data["alert_timestamp"])
 
@@ -173,6 +182,9 @@ def generate_summary_report(
             "description": stats["description"],
             "count": stats["frequency"],
             "affected_paths": sorted(list(stats["target_files"])),
+            "process_images": sorted(list(stats["process_images"])),
+            "target_process_images": sorted(list(stats["target_process_images"])),
+            "event_timestamps": sorted(list(stats["event_timestamps"])),
             "first_seen": min(stats["timestamps"]) if stats["timestamps"] else "UNKNOWN",
             "last_seen": max(stats["timestamps"]) if stats["timestamps"] else "UNKNOWN",
         }
@@ -198,6 +210,20 @@ def generate_summary_report(
             paths = ", ".join(meta["affected_paths"]) if meta["affected_paths"] else "None"
             lines.append(
                 f"| `{r_id}` | {meta['level']} | {meta['count']} | {meta['description']} | `{paths}` |"
+            )
+        lines.extend(["", "## Process & Event Timestamp Context", ""])
+        for r_id, meta in formatted_rules.items():
+            procs = ", ".join(meta["process_images"]) if meta["process_images"] else "None"
+            target_procs = (
+                ", ".join(meta["target_process_images"])
+                if meta["target_process_images"]
+                else "None"
+            )
+            ev_times = (
+                ", ".join(meta["event_timestamps"]) if meta["event_timestamps"] else "None"
+            )
+            lines.append(
+                f"- **`{r_id}`:** Process: `{procs}` | Target Process: `{target_procs}` | Event Time: `{ev_times}`"
             )
         return "\n".join(lines)
 
