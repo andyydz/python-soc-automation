@@ -195,3 +195,32 @@ def test_sysmon_eid_semantics_and_timestamps():
     assert summary["rules"]["100110"]["affected_paths"] == []
     assert summary["rules"]["100130"]["affected_paths"] == []
     assert summary["rules"]["100140"]["affected_paths"] == ["C:\\Windows\\System32\\lsass.dmp"]
+
+
+def test_malformed_and_mixed_records_in_summary_report():
+    valid_alert = {
+        "timestamp": "2026-11-21T13:00:00.000+0530",
+        "rule": {"id": "100002", "level": 8, "description": "FIM modified"},
+        "syscheck": {"path": "/home/sentinel-admin/test.txt"},
+    }
+
+    report_none = generate_summary_report([None], output_format="dict")
+    assert report_none["total_alerts"] == 1
+    assert report_none["unique_rules"] == 1
+    assert report_none["rules"]["UNKNOWN"]["count"] == 1
+    assert report_none["rules"]["UNKNOWN"]["affected_paths"] == []
+
+    report_empty = generate_summary_report([{}], output_format="dict")
+    assert report_empty["total_alerts"] == 1
+    assert report_empty["rules"]["UNKNOWN"]["count"] == 1
+
+    report_bad_envelope = generate_summary_report([{"alert": "not-a-dict"}], output_format="dict")
+    assert report_bad_envelope["total_alerts"] == 1
+    assert report_bad_envelope["rules"]["UNKNOWN"]["count"] == 1
+
+    mixed = generate_summary_report([None, {}, {"alert": 42}, valid_alert], output_format="dict")
+    assert mixed["total_alerts"] == 4
+    assert mixed["unique_rules"] == 2
+    assert mixed["rules"]["UNKNOWN"]["count"] == 3
+    assert mixed["rules"]["100002"]["count"] == 1
+    assert mixed["rules"]["100002"]["affected_paths"] == ["/home/sentinel-admin/test.txt"]

@@ -21,7 +21,13 @@ def _extract_alert_data(alert: Any) -> Dict[str, Any]:
         "rule_level": -1,
         "rule_description": "No description available",
         "file_path": "N/A",
+        "fim_path": None,
+        "target_file": None,
+        "process_image": None,
+        "target_process_image": None,
         "timestamp": "UNKNOWN",
+        "alert_timestamp": "UNKNOWN",
+        "event_timestamp": None,
     }
 
     if not isinstance(alert, dict):
