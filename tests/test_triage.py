@@ -235,3 +235,33 @@ def test_malformed_and_mixed_records_in_summary_report():
     assert mixed["rules"]["UNKNOWN"]["count"] == 3
     assert mixed["rules"]["100002"]["count"] == 1
     assert mixed["rules"]["100002"]["affected_paths"] == ["/home/sentinel-admin/test.txt"]
+
+def test_triage_extracts_full_log_json_win_and_srcip():
+    import json as _json
+    from soc_automation.triage import _extract_alert_data, _extract_srcip, generate_summary_report
+
+    alert = {
+        "rule": {"id": "100101", "level": 10, "description": "Sysmon process event"},
+        "timestamp": "2026-11-18T12:57:06.508+0530",
+        "full_log": _json.dumps({
+            "win": {
+                "system": {"systemTime": "2026-11-18T07:27:06.508Z"},
+                "eventdata": {
+                    "image": r"C:\Windows\System32\cmd.exe",
+                    "targetFilename": r"C:\Temp\drop.exe",
+                    "sourceIp": "10.10.10.40",
+                },
+            }
+        }),
+    }
+
+    extracted = _extract_alert_data(alert)
+    assert extracted["rule_id"] == "100101"
+    assert extracted["file_path"] == r"C:\Temp\drop.exe"
+    assert extracted["process_image"] == r"C:\Windows\System32\cmd.exe"
+    assert extracted["event_timestamp"] == "2026-11-18T07:27:06.508Z"
+    assert _extract_srcip(alert) == "10.10.10.40"
+
+    report = generate_summary_report([alert], output_format="dict")
+    assert report["total_alerts"] == 1
+    assert report["rules"]["100101"]["affected_paths"] == [r"C:\Temp\drop.exe"]

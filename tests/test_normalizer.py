@@ -48,3 +48,17 @@ def test_normalize_timestamp_without_timezone():
 def test_reject_invalid_timestamp_type(timestamp):
     with pytest.raises(TypeError):
         normalize_timestamp(timestamp)
+
+
+def test_normalize_z_timestamp_with_fractional_seconds():
+    result = normalize_timestamp("2026-11-18T12:57:06.508Z")
+
+    assert result["timestamp_utc"] == "2026-11-18T12:57:06.508000Z"
+    assert result["warnings"] == []
+
+
+def test_normalize_alert_missing_required_fields_raises():
+    from soc_automation.normalizer import normalize_alert
+
+    with pytest.raises(ValueError):
+        normalize_alert({"severity": 5})

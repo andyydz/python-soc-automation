@@ -19,3 +19,6 @@ soc-automation = "soc_automation.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+soc_automation = ["data/*.json", "data/sample_logs/*.json"]

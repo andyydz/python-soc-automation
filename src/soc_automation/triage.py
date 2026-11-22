@@ -58,8 +58,35 @@ def _extract_alert_data(alert: Any) -> Dict[str, Any]:
     raw_fim_path = syscheck.get("path")
     fim_path = raw_fim_path.strip() if isinstance(raw_fim_path, str) and raw_fim_path.strip() else None
 
+    full_log_obj: Dict[str, Any] = {}
+    raw_full_log = target.get("full_log")
+    if isinstance(raw_full_log, str) and raw_full_log.strip().startswith("{"):
+        try:
+            decoded = json.loads(raw_full_log)
+            if isinstance(decoded, dict):
+                full_log_obj = decoded
+        except json.JSONDecodeError:
+            full_log_obj = {}
+
     data_obj = target.get("data") if isinstance(target.get("data"), dict) else {}
-    win_obj = data_obj.get("win") if isinstance(data_obj.get("win"), dict) else {}
+    if not data_obj and isinstance(full_log_obj.get("data"), dict):
+        data_obj = full_log_obj["data"]
+
+    if not fim_path and isinstance(full_log_obj.get("syscheck"), dict):
+        fl_path = full_log_obj["syscheck"].get("path")
+        if isinstance(fl_path, str) and fl_path.strip():
+            fim_path = fl_path.strip()
+
+    win_obj: Dict[str, Any] = {}
+    for candidate in (
+        data_obj.get("win"),
+        target.get("win"),
+        full_log_obj.get("win"),
+        full_log_obj if "system" in full_log_obj or "eventdata" in full_log_obj else None,
+    ):
+        if isinstance(candidate, dict) and candidate:
+            win_obj = candidate
+            break
     system_obj = win_obj.get("system") if isinstance(win_obj.get("system"), dict) else {}
     eventdata = win_obj.get("eventdata") if isinstance(win_obj.get("eventdata"), dict) else {}
 
@@ -281,9 +308,39 @@ def _extract_srcip(alert: Any) -> Optional[str]:
     target = alert.get("alert") if isinstance(alert.get("alert"), dict) else alert
     if not isinstance(target, dict):
         return None
-    data = target.get("data")
-    if isinstance(data, dict) and data.get("srcip"):
-        return str(data["srcip"])
+
+    full_log_obj: Dict[str, Any] = {}
+    raw_full_log = target.get("full_log")
+    if isinstance(raw_full_log, str) and raw_full_log.strip().startswith("{"):
+        try:
+            decoded = json.loads(raw_full_log)
+            if isinstance(decoded, dict):
+                full_log_obj = decoded
+        except json.JSONDecodeError:
+            full_log_obj = {}
+
+    for container in (target.get("data"), full_log_obj.get("data")):
+        if isinstance(container, dict):
+            for key in ("srcip", "sourceIp", "SourceIp"):
+                if container.get(key):
+                    return str(container[key])
+            win = container.get("win")
+            if isinstance(win, dict) and isinstance(win.get("eventdata"), dict):
+                for key in ("sourceIp", "SourceIp", "srcip", "SrcIp"):
+                    if win["eventdata"].get(key):
+                        return str(win["eventdata"][key])
+
+    for win_cand in (
+        target.get("data", {}).get("win") if isinstance(target.get("data"), dict) else None,
+        target.get("win"),
+        full_log_obj.get("win"),
+        full_log_obj if isinstance(full_log_obj.get("eventdata"), dict) else None,
+    ):
+        if isinstance(win_cand, dict) and isinstance(win_cand.get("eventdata"), dict):
+            for key in ("sourceIp", "SourceIp", "srcip", "SrcIp"):
+                if win_cand["eventdata"].get(key):
+                    return str(win_cand["eventdata"][key])
+
     return None
 
 

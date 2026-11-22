@@ -33,8 +33,12 @@ def normalize_timestamp(timestamp_original: str | None) -> dict[str, Any]:
             ],
         }
 
+    cleaned_timestamp = timestamp_original.strip()
+    if cleaned_timestamp.endswith(("Z", "z")):
+        cleaned_timestamp = f"{cleaned_timestamp[:-1]}+00:00"
+
     try:
-        parsed_timestamp = datetime.fromisoformat(timestamp_original)
+        parsed_timestamp = datetime.fromisoformat(cleaned_timestamp)
     except ValueError:
         return {
             "timestamp_utc": None,
@@ -89,10 +93,18 @@ def normalize_alert(parsed_alert: dict[str, Any]) -> dict[str, Any]:
     if parsed_alert.get("agent") is None:
         warnings.append("Agent name is missing.")
 
+    rule_id = parsed_alert.get("rule_id")
+    if not isinstance(rule_id, str) or not rule_id.strip():
+        raise ValueError("Parsed alert must include a non-empty rule_id.")
+
+    severity = parsed_alert.get("severity")
+    if not isinstance(severity, int) or isinstance(severity, bool):
+        raise ValueError("Parsed alert must include an integer severity.")
+
     # Build the normalized alert.
     normalized_alert = {
-        "rule_id": parsed_alert["rule_id"],
-        "severity": parsed_alert["severity"],
+        "rule_id": rule_id,
+        "severity": severity,
         "agent": parsed_alert.get("agent"),
         "description": parsed_alert.get("description"),
         "timestamp_original": parsed_alert.get("timestamp_original"),
