@@ -362,11 +362,16 @@ The tree shows the main project components; other configuration files may also e
 
 ## Relationship to SENTINEL SOC Lab
 
-I wanted to understand how a Security Operations Center works in practice, which led me to build [SENTINEL SOC Lab](https://github.com/andyydz/sentinel-soc-lab), a separate virtual SOC environment built around Wazuh, an Ubuntu endpoint, and a Kali Linux VM planned for controlled testing. It is where I explore security monitoring, detection engineering, incident investigation, and evidence documentation.
+I built [SENTINEL SOC Lab](https://github.com/andyydz/sentinel-soc-lab) as a separate virtual SOC environment built around Wazuh, an Ubuntu endpoint (`sentinel-linux01`), and a Kali Linux VM for controlled testing. It is where I explore security monitoring, detection engineering, incident investigation, and evidence documentation.
 
 Working with Wazuh events there showed me how repetitive it is to examine exported JSON, interpret alert fields, and organize findings. That motivated this project: a separate tool that automates alert ingestion, validation, normalization, optional enrichment, and investigation-record generation. SENTINEL is the environment for developing and testing detection workflows; this engine focuses on how exported alert data is processed and organized.
 
-My long-term goal is for sanitized alert exports from SENTINEL to be processed by this engine. **The two repositories are currently independent, and no integration has been implemented.** The intended interface is outlined in the [Integration Contract](docs/integration-contract.md).
+End-to-end processing of sanitized Linux File Integrity Monitoring (FIM) alert exports from SENTINEL has been validated using `python-soc-automation` `v1.0` (commit `9696707`) on a 3-alert probe slice covering rules `100003` (create), `100002` (modify), and `100004` (delete) for `/home/sentinel-admin/.fim_probe_test.txt`. The two repositories remain separate codebases with no automated cross-repo pipeline; the intended interface is outlined in the [Integration Contract](docs/integration-contract.md).
+
+### Validated Live Integration Notes (Linux FIM Probe)
+- **Markdown triage report (`--report-format markdown`):** Captures rule ID, rule level, alert frequency, rule description, monitored target path(s), extracted file path artifacts, and suspicious/hidden FIM path indicators (such as `/home/sentinel-admin/.fim_probe_test.txt`). It does not render original Wazuh alert IDs, alert timestamps, agent metadata, or payload/file hashes.
+- **JSON triage report (`--report-format json`):** Preserves `total_alerts`, `unique_rules`, per-rule counts and timestamps (`first_seen` / `last_seen`), `artifacts`, and `v07_triage_context`, while representing unavailable Linux process/child-event fields as empty lists (`process_images: []`, `target_process_images: []`, `event_timestamps: []`).
+- **Expected `None` fields on Linux `syscheck` FIM events:** `Process: None | Target Process: None | Event Time: None` in Markdown output (and empty process/event lists in JSON) reflects fields absent from Linux FIM alert payloads rather than a parser failure.
 
 ## Roadmap
 
