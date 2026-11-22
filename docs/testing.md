@@ -174,7 +174,7 @@ The shipped MITRE dataset currently has no verified rule mappings. Passing MITRE
 - **No live integration testing.** The engine processes exported files. There is no live Wazuh manager or API to test against.
 - **Dataset-dependent enrichment.** Enrichment is limited by the local datasets. See the MITRE note in section 10.
 - **Scope of this document.** Performance, load, and fuzz testing are not described here, and none is claimed. This document does not describe a continuous integration workflow.
-- **Not-implemented capabilities.** Nothing is tested for autonomous response, alert correlation, full case management, or SENTINEL SOC Lab integration. None of these is implemented.
+- **Not-implemented capabilities.** Nothing is tested for autonomous response, alert correlation, full case management, live Wazuh API polling, or continuous cross-repo automation (file-based triage of exported/normalized SENTINEL alerts is covered).
 
 ## 12. Future Testing Improvements
 

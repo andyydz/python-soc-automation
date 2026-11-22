@@ -33,21 +33,6 @@ def _extract_alert_data(alert: Any) -> Dict[str, Any]:
     if not isinstance(alert, dict):
         return default_record
 
-    # If the record is wrapped in an envelope (e.g., Schema v1.2), unwrap it
-    target = alert.get("alert") if isinstance(alert.get("alert"), dict) else alert
-    if not isinstance(target, dict):
-        return default_record
-
-    rule = target.get("rule") if isinstance(target.get("rule"), dict) else {}
-    syscheck = target.get("syscheck") if isinstance(target.get("syscheck"), dict) else {}
-
-    # Safe level parsing
-    raw_level = rule.get("level")
-    try:
-        level = int(raw_level) if raw_level is not None else -1
-    except (ValueError, TypeError):
-        level = -1
-
     def _first_non_empty(mapping: Dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
         for key in keys:
             val = mapping.get(key)
@@ -55,10 +40,58 @@ def _extract_alert_data(alert: Any) -> Dict[str, Any]:
                 return val.strip()
         return None
 
+    # If the record is wrapped in an envelope (e.g., Schema v1.2), unwrap it
+    has_envelope = isinstance(alert.get("alert"), dict)
+    target = alert.get("alert") if has_envelope else alert
+    if not isinstance(target, dict):
+        return default_record
+
+    raw_alert = alert.get("raw_alert") if has_envelope and isinstance(alert.get("raw_alert"), dict) else {}
+    rule = target.get("rule") if isinstance(target.get("rule"), dict) else {}
+    raw_rule = raw_alert.get("rule") if isinstance(raw_alert.get("rule"), dict) else {}
+
+    rule_id_val = _first_non_empty(target, ("rule_id", "ruleId"))
+    if rule_id_val is None:
+        raw_id = rule.get("id") if rule.get("id") is not None else raw_rule.get("id")
+        rule_id = str(raw_id) if raw_id is not None and str(raw_id).strip() else "UNKNOWN"
+    else:
+        rule_id = rule_id_val
+
+    raw_level = None
+    for candidate in (
+        target.get("severity"),
+        target.get("level"),
+        rule.get("level"),
+        raw_rule.get("level"),
+    ):
+        if candidate is not None and not isinstance(candidate, bool):
+            raw_level = candidate
+            break
+    try:
+        level = int(raw_level) if raw_level is not None else -1
+    except (ValueError, TypeError):
+        level = -1
+
+    rule_description = (
+        _first_non_empty(target, ("description", "rule_description"))
+        or _first_non_empty(rule, ("description",))
+        or _first_non_empty(raw_rule, ("description",))
+        or "No description available"
+    )
+
+    syscheck = (
+        target.get("syscheck")
+        if isinstance(target.get("syscheck"), dict)
+        else raw_alert.get("syscheck") if isinstance(raw_alert.get("syscheck"), dict) else {}
+    )
     raw_fim_path = syscheck.get("path")
     fim_path = raw_fim_path.strip() if isinstance(raw_fim_path, str) and raw_fim_path.strip() else None
 
-    data_obj = target.get("data") if isinstance(target.get("data"), dict) else {}
+    data_obj = (
+        target.get("data")
+        if isinstance(target.get("data"), dict)
+        else raw_alert.get("data") if isinstance(raw_alert.get("data"), dict) else {}
+    )
     win_obj = data_obj.get("win") if isinstance(data_obj.get("win"), dict) else {}
     system_obj = win_obj.get("system") if isinstance(win_obj.get("system"), dict) else {}
     eventdata = win_obj.get("eventdata") if isinstance(win_obj.get("eventdata"), dict) else {}
@@ -72,15 +105,19 @@ def _extract_alert_data(alert: Any) -> Dict[str, Any]:
     # affected_paths / file_path only reflect file targets, never process/target images
     file_path = fim_path or target_file or "N/A"
 
-    alert_timestamp = str(target.get("timestamp", "UNKNOWN"))
+    ts_val = (
+        _first_non_empty(target, ("timestamp", "timestamp_utc", "timestamp_original"))
+        or _first_non_empty(raw_alert, ("timestamp",))
+    )
+    alert_timestamp = ts_val if ts_val is not None else "UNKNOWN"
     event_timestamp = _first_non_empty(system_obj, ("systemTime", "SystemTime")) or _first_non_empty(
         eventdata, ("UtcTime", "utcTime")
     )
 
     return {
-        "rule_id": str(rule.get("id", "UNKNOWN")),
+        "rule_id": rule_id,
         "rule_level": level,
-        "rule_description": str(rule.get("description", "No description available")),
+        "rule_description": rule_description,
         "file_path": file_path,
         "fim_path": fim_path,
         "target_file": target_file,

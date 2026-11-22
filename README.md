@@ -50,7 +50,7 @@ Security alerts often arrive as nested JSON with fields that may be missing, inc
 - No autonomous incident response and no complete case-management lifecycle. Investigation records are initial structured records, not complete investigations.
 - The local MITRE ATT&CK dataset currently contains no rule mappings, so MITRE lookups return no results until validated mappings are added.
 - Severity bands are engine-defined context, not official Wazuh severity classifications.
-- No SENTINEL SOC Lab integration has been implemented.
+- File-based triage of exported/normalized SENTINEL alerts is validated; live Wazuh API integration, continuous cross-repo automation, and autonomous response are not implemented.
 
 ## Features
 
@@ -276,7 +276,7 @@ See [Sample Output](docs/sample-output.md) for additional examples.
 
 pytest tests cover parsing and validation (including missing and malformed input), timestamp normalization, file ingestion, SHA-256 calculation, rule metadata, severity, MITRE lookup, data-quality checks, investigation generation, severity triage filtering, summary report generation, pipeline integration with and without enrichment, and CLI behavior (arguments, triage flags, output, export, combined options, exit codes).
 
-**166 automated unit and integration tests** passing:
+**195 automated unit and integration tests** passing:
 
 ```powershell
 python -m pytest -v
@@ -393,7 +393,8 @@ End-to-end processing of sanitized Linux File Integrity Monitoring (FIM) alert e
 - [ ] Evidence and case-reference management
 - [ ] Additional validated rule-to-ATT&CK mappings
 - [ ] Sanitized real-world alert validation
-- [ ] SENTINEL SOC Lab integration
+- [x] File-based SENTINEL FIM alert triage (`v0.10` / `v1.0.1` schema 1.2 & CLI flag support)
+- [ ] Live Wazuh API & automated cross-repo integration
 - [ ] Additional SIEM input adapters
 
 Reliable Wazuh processing takes priority over expanding to other SIEM platforms.

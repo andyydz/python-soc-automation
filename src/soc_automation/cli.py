@@ -3,7 +3,9 @@ import json
 import sys
 from pathlib import Path
 
+from soc_automation.enrichment.engine import enrich_alert
 from soc_automation.ingestion import ingest_wazuh_alert_file
+from soc_automation.integrity import calculate_sha256
 from soc_automation.triage import filter_by_severity, generate_summary_report
 
 
@@ -74,7 +76,9 @@ def main() -> int:
             )
 
             input_path = Path(args.input_file)
-            content = input_path.read_text(encoding="utf-8-sig")
+            raw_bytes = input_path.read_bytes()
+            sha256_hash = calculate_sha256(raw_bytes) if args.sha256 else None
+            content = raw_bytes.decode("utf-8-sig")
             try:
                 data = json.loads(content)
                 alerts = data if isinstance(data, list) else [data]
@@ -99,12 +103,44 @@ def main() -> int:
             v07_context = build_v07_triage_context(alerts)
             report = generate_summary_report(triaged, output_format=args.report_format)
 
+            enrichment_records = []
+            if args.enrich:
+                for item in triaged:
+                    if not isinstance(item, dict):
+                        continue
+                    inner = item.get("alert") if isinstance(item.get("alert"), dict) else item
+                    rule_obj = inner.get("rule") if isinstance(inner.get("rule"), dict) else {}
+                    agent_obj = inner.get("agent") if isinstance(inner.get("agent"), dict) else {}
+                    enrichment_payload = {
+                        "alert": {
+                            "rule_id": inner.get("rule_id") or rule_obj.get("id"),
+                            "severity": inner.get("severity") if inner.get("severity") is not None else rule_obj.get("level"),
+                            "agent_name": inner.get("agent_name")
+                            or (inner.get("agent") if isinstance(inner.get("agent"), str) else None)
+                            or agent_obj.get("name"),
+                            "description": inner.get("description") or rule_obj.get("description"),
+                        }
+                    }
+                    enriched = enrich_alert(enrichment_payload)
+                    enrichment_records.append(enriched.get("enrichment", enriched))
+
             if args.report_format == "json":
                 payload = report if isinstance(report, dict) else json.loads(str(report))
                 payload["v07_triage_context"] = v07_context
+                if sha256_hash is not None:
+                    payload["source_sha256"] = sha256_hash
+                if args.enrich:
+                    payload["enrichments"] = enrichment_records
                 report_str = json.dumps(payload, indent=4)
             else:
-                report_str = f"{report}\n\n{format_v07_context_markdown(v07_context)}"
+                extra_sections = [format_v07_context_markdown(v07_context)]
+                if sha256_hash is not None:
+                    extra_sections.append(f"## Source Integrity\n- **SHA-256:** `{sha256_hash}`")
+                if args.enrich:
+                    extra_sections.append(
+                        f"## Enrichment Summary\n- **Enriched Triaged Alerts:** {len(enrichment_records)}"
+                    )
+                report_str = f"{report}\n\n" + "\n\n".join(extra_sections)
 
             if args.output:
                 output_path = Path(args.output)
