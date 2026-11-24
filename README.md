@@ -1,46 +1,108 @@
-# SENTINEL: Evidence-Driven SOC Detection, Investigation and Response Lab
+# Python SOC Automation Engine
 
-An isolated virtual SOC lab built around Wazuh and Sysmon. It is used to practice the detect → investigate → document loop with evidence for every claim.
+A standalone Python tool for **file-based processing, enrichment, triage, and reporting** of exported Wazuh alert files.
 
-> Student lab project. Everything runs in a local virtual environment. Nothing here is a production deployment.
+> Student project. It works on exported alert files only. There is no live Wazuh connection.
 
 ## Overview
 
-SENTINEL models a small enterprise network. Attacks are run from a Kali Linux VM against a monitored Ubuntu endpoint, detections are built and tested in Wazuh, and each investigation is documented with its evidence.
+`python-soc-automation` takes Wazuh alerts that have been exported to files and turns them into standardized, analyst-friendly output. It can process a single alert, add local enrichment, and triage batches of alerts into Markdown or JSON reports.
 
-**Rule:** no alert, screenshot, or result is fabricated. Everything documented here comes from actual lab runs.
+It complements [SENTINEL](https://github.com/andyydz/Sentinel-SOC-Lab) through exported alert files. There is no live Wazuh API integration and no real-time connection between the two projects.
 
-## Lab Environment
+- **Package:** `src/soc_automation/`
+- **CLI command:** `soc-automation`
+- **Entry point:** `soc_automation.cli:main`
 
-| Component | Detail |
-|-----------|--------|
-| Hypervisor | Oracle VirtualBox |
-| SIEM / XDR | Wazuh 4.14.8 (manager: `SENTINEL-WAZUH`) |
-| Monitored endpoint | Ubuntu 24.04 (agent: `SENTINEL-LINUX01`) |
-| Attacker | Kali Linux 2026.2 |
-| Telemetry | Wazuh File Integrity Monitoring (`/home`), Sysmon (via EVTX replay) |
-| Network | Isolated VirtualBox network `10.10.10.0/24` between lab VMs; the Wazuh VM also has NAT for outbound access |
+## Implemented Capabilities
 
-## What It Covers
+### Single-alert processing
 
-- Custom Wazuh detection rules, including FIM rules and SSH brute-force rules `100200` (Level 5) and `100201` (Level 10, six matching failures within 60 seconds from the same source IP)
-- Sysmon event replay: EVTX converted with `python-evtx` (`scripts/evtx_to_wazuh.py`) and ingested by the manager's logcollector
-- Written investigations (for example `investigations/CASE-001.md`) with an evidence index and validation notes
-- Detections mapped to MITRE ATT&CK
+- Reads a single alert from a JSON file
+- Produces a standardized output schema, **v1.2**
+- Preserves the original alert as `raw_alert`
+- Normalizes timestamps to UTC
+- Optional SHA-256 hashing of the original input bytes (`--sha256`)
+
+### Optional local enrichment (`--enrich`)
+
+- Wazuh rule metadata
+- Engine-defined severity context
+- Local MITRE ATT&CK lookup (currently 7 custom Sysmon rule mappings)
+- Data-quality checks
+- Provenance information
+- Artifact extraction: file paths, process images, target process images, and IP addresses
+
+### Structured investigation output
+
+- Produces structured investigation data from processed alerts
+
+### Batch triage (`--triage`)
+
+- Accepts a JSON array, a single JSON object, or NDJSON
+- Filters by severity with `--min-level`
+- Generates Markdown or JSON reports with `--report-format markdown|json`
+
+## CLI Flags
+
+| Flag | Purpose |
+|------|---------|
+| `--sha256` | Hash the original input bytes with SHA-256 |
+| `--enrich` | Add local enrichment to the output |
+| `--triage` | Run batch triage on JSON array, JSON object, or NDJSON input |
+| `--min-level` | Filter triage results by minimum severity level |
+| `--report-format markdown\|json` | Choose the triage report format |
+
+## Repository Structure
+
+```text
+src/soc_automation/
+├── cli.py              # CLI entry point (soc_automation.cli:main)
+├── ingestion.py
+├── integrity.py
+├── parser.py
+├── normalizer.py
+├── pipeline.py
+├── triage.py
+├── enrichment/
+│   ├── artifacts.py
+│   ├── data_quality.py
+│   ├── engine.py
+│   ├── mitre.py
+│   ├── rule_metadata.py
+│   └── severity.py
+└── investigation/
+    └── builder.py
+
+tests/                  # 16 test_*.py modules
+docs/Readme.md
+```
+
+## Tests
+
+The `tests/` directory contains **16 `test_*.py` modules** with **154 top-level `def test_` functions**.
+
+> This is a source-level count of test functions, not a claim about a live test run or pass/fail results.
 
 ## Documentation
 
-Detailed documentation is in [`docs/`](docs/) (`01` to `08`), including [architecture](docs/03-architecture.md) and [detection engineering](docs/05-detection-engineering.md).
+Additional documentation is in [`docs/Readme.md`](docs/Readme.md).
 
-## Relationship to python-soc-automation
+## Scope and Limitations
 
-[python-soc-automation](https://github.com/andyydz/python-soc-automation) is a separate repository. It processes exported alert files from this lab. There is no live integration between the two, and it is not connected to the production Wazuh deployment.
+This project is intentionally limited. It does **not** provide:
 
-## Limitations
+- Live Wazuh API integration or manager polling (file-based processing only)
+- Real-time alert collection or a continuous monitoring service
+- Autonomous containment or SOAR functionality
+- A full case-management system
+- A dedicated cross-event correlation engine
 
-- Single-lab, virtual environment only
-- No real-world production traffic or live threat data
-- No claim of autonomous response or enterprise readiness
+Local MITRE ATT&CK mappings currently cover only 7 custom Sysmon rules. They are not comprehensive.
+
+## Relationship to SENTINEL
+
+[SENTINEL](https://github.com/andyydz/Sentinel-SOC-Lab) is a separate repository: a virtual SOC lab built around Wazuh and Sysmon. This tool can process alert files exported from that kind of environment. The two are connected only through exported files.
 
 ## Author
 
